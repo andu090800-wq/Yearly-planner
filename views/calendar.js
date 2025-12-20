@@ -250,46 +250,78 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ---- Render: week ----
   function renderWeek(anchorISO) {
-    const start = startOfWeekMonday(anchorISO);
-    const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const start = startOfWeekMonday(anchorISO);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
-    const dayCards = days.map(d => {
-      const its = itemsForDay(d);
-      const isToday = d === today;
+  const selected = (yr.calendar.selectedDate || today);
+  const sel = selected;
 
-      const list = its.length ? its.map(it => {
-        if (it.kind === "habit") {
-          return `
-            <div class="calItem">
-              <label class="calHabit">
-                <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(d)}" />
-                <span class="calChip habit">${App.esc(it.title)}</span>
-              </label>
-            </div>
-          `;
-        }
-        return `
-          <div class="calItem">
-            <button class="calChip ${it.kind} ${it.overdue ? "overdue" : ""}" data-nav="${App.esc(it.nav)}">
-              ${App.esc(it.title)}
-            </button>
-          </div>
-        `;
-      }).join("") : `<div class="muted">No items.</div>`;
+  // Week strip (iPhone-like)
+  const strip = days.map(d => {
+    const its = itemsForDay(d);
+    const hasAny = its.length > 0;
+    const isToday = d === today;
+    const isSel = d === sel;
+    const hasOverdue = its.some(x => x.overdue);
 
+    // short day labels Mon..Sun (start Monday)
+    const dow = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    const idx = (fromISO(d).getDay() + 6) % 7; // Mon=0 .. Sun=6
+
+    return `
+      <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}"
+              data-day="${App.esc(d)}">
+        <div class="wkDow">${dow[idx]}</div>
+        <div class="wkNum">${App.esc(String(Number(d.slice(8,10))))}</div>
+        <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
+      </button>
+    `;
+  }).join("");
+
+  // Agenda for selected day
+  const its = itemsForDay(sel);
+  const list = its.length ? its.map(it => {
+    if (it.kind === "habit") {
       return `
-        <div class="card big calDay ${isToday ? "today" : ""}">
-          <div class="calDayHead">
-            <div class="calDayTitle">${App.esc(dowLabel(d))} <b>${App.esc(d)}</b></div>
-            ${isToday ? `<span class="pill">Today</span>` : ``}
-          </div>
-          <div class="calList">${list}</div>
+        <div class="agRow">
+          <label class="agHabit">
+            <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(sel)}" />
+            <span class="agTitle">${App.esc(it.title)}</span>
+          </label>
+          <span class="agTag">habit</span>
         </div>
       `;
-    }).join("");
+    }
+    return `
+      <button class="agRow agBtn ${it.overdue ? "bad" : ""}" data-nav="${App.esc(it.nav)}">
+        <div class="agText">
+          <div class="agTitle">${App.esc(it.title)}</div>
+          <div class="agSub">${App.esc(it.kind)}</div>
+        </div>
+        <span class="agTag ${it.overdue ? "bad" : ""}">${App.esc(it.kind)}</span>
+      </button>
+    `;
+  }).join("") : `<div class="muted">No items.</div>`;
 
-    return `<div class="stack" style="gap:12px">${dayCards}</div>`;
-  }
+  return `
+    <div class="card big stack" style="gap:12px">
+      <div class="wkHead">
+        <div class="title2">Week</div>
+        <span class="pill">${App.esc(start)} → ${App.esc(addDays(start,6))}</span>
+      </div>
+
+      <div class="wkStrip">${strip}</div>
+
+      <div class="agWrap">
+        <div class="agHead">
+          <div class="title2">Agenda</div>
+          <span class="pill">${App.esc(sel)}${sel === today ? " • Today" : ""}</span>
+        </div>
+        <div class="agList">${list}</div>
+      </div>
+    </div>
+  `;
+}
 
   // ---- Render: month grid (iPhone-like: circle + dots) ----
   function renderMonth(anchorISO) {
@@ -535,6 +567,15 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
         rerender(d, "week");
       };
     });
+
+    // week strip day select
+el.querySelectorAll(".wkDay[data-day]").forEach(btn => {
+  btn.onclick = () => {
+    const d = btn.getAttribute("data-day");
+    savePrefs({ selectedDate: d, focusDate: d });
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
+});
 
     // year/month click
     el.querySelectorAll("[data-month]").forEach(btn => {
