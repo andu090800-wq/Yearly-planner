@@ -1,6 +1,7 @@
 /* ===========================
    Plans App — styles.css (FULL)
    Clean iOS-like, black & white
+   Includes iOS Calendar circle selection
    =========================== */
 
 :root{
@@ -21,7 +22,6 @@
   --danger: #b00020;
 }
 
-/* Global reset-ish */
 *{ box-sizing:border-box; }
 html, body{ height:100%; }
 body{
@@ -31,7 +31,6 @@ body{
   background:var(--bg);
 }
 
-/* Links */
 a{ color:inherit; text-decoration:none; }
 
 /* App layout */
@@ -41,14 +40,13 @@ a{ color:inherit; text-decoration:none; }
   flex-direction:column;
 }
 
-/* Main shell: sidebar + content */
 .shell{
   display:flex;
   min-height:100vh;
 }
 
 .sidebar{
-  width:320px; /* ~25% on desktop */
+  width:320px;
   padding:14px;
   border-right:1px solid var(--border);
   background: rgba(255,255,255,.55);
@@ -58,10 +56,9 @@ a{ color:inherit; text-decoration:none; }
 .content{
   flex:1;
   padding:14px;
-  padding-bottom:92px; /* space for bottom tabs on mobile */
+  padding-bottom:92px;
 }
 
-/* Responsive: sidebar becomes top / drawer-like (simple) */
 @media (max-width: 920px){
   .shell{ flex-direction:column; }
   .sidebar{
@@ -88,7 +85,7 @@ a{ color:inherit; text-decoration:none; }
   line-height:1.35;
 }
 
-/* Layout helpers */
+/* Helpers */
 .row{
   display:flex;
   align-items:center;
@@ -109,9 +106,8 @@ a{ color:inherit; text-decoration:none; }
   box-shadow:var(--shadow2);
   padding:14px;
 }
-.card.big{
-  padding:16px;
-}
+.card.big{ padding:16px; }
+
 .cardTap{
   cursor:pointer;
   transition: transform .08s ease, box-shadow .08s ease, border-color .08s ease;
@@ -190,36 +186,7 @@ a{ color:inherit; text-decoration:none; }
   font-size:12px;
 }
 
-/* Simple grid helpers */
-.grid{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap:12px;
-}
-@media (max-width: 820px){
-  .grid{ grid-template-columns: 1fr; }
-}
-
-/* Years grid (dashboard cards) */
-.gridYears{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap:10px;
-}
-@media (min-width: 980px){
-  .gridYears{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 560px){
-  .gridYears{ grid-template-columns: 1fr; }
-}
-
-.yearBig{
-  font-size:26px;
-  font-weight:900;
-  letter-spacing:-.02em;
-}
-
-/* Tables (if you use them) */
+/* Tables */
 .table{
   width:100%;
   border-collapse:separate;
@@ -233,7 +200,7 @@ a{ color:inherit; text-decoration:none; }
 }
 .table th{ font-weight:900; }
 
-/* Bottom tabs (mobile-like) */
+/* Bottom tabs */
 .bottomTabs{
   position:fixed;
   left:0;
@@ -262,169 +229,369 @@ a{ color:inherit; text-decoration:none; }
   border-color: rgba(0,0,0,.20);
   box-shadow: 0 8px 18px rgba(0,0,0,.06);
 }
-@media (min-width: 921px){
-  /* Optional: hide bottom tabs on desktop if you want */
-  /* .bottomTabs{ display:none; } */
-}
 
 /* ===========================
-   Calendar — iPhone-like
-   Month grid + Week strip + Year + Agenda
+   iOS Calendar (single block + segmented + sheet)
    =========================== */
 
-.calPhoneCard { padding:16px; }
+.iosWrap{ display:flex; flex-direction:column; gap:12px; }
+.iosCard{
+  background:#fff;
+  border:1px solid rgba(0,0,0,.10);
+  border-radius:22px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.05);
+  padding:14px;
+}
 
-.calPhoneHeader{
+.iosTop{ display:flex; flex-direction:column; gap:10px; }
+.iosAppTitle{ font-weight:900; font-size:18px; letter-spacing:-0.01em; }
+
+.iosSeg{
+  display:flex;
+  gap:6px;
+  padding:6px;
+  background: rgba(0,0,0,.05);
+  border-radius:16px;
+  width: fit-content;
+}
+.iosSegBtn{
+  border:0;
+  background: transparent;
+  padding:8px 12px;
+  border-radius:12px;
+  font:inherit;
+  font-weight:900;
+  cursor:pointer;
+}
+.iosSegBtn.active{
+  background:#fff;
+  box-shadow: 0 8px 18px rgba(0,0,0,.06);
+}
+
+.iosNav{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.iosNavBtn{
+  border:1px solid rgba(0,0,0,.12);
+  background:#fff;
+  border-radius:14px;
+  padding:8px 10px;
+  font:inherit;
+  font-weight:900;
+  cursor:pointer;
+}
+.iosSelectedPill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.12);
+  background:#fff;
+  font-size:12px;
+}
+
+.iosCalBody{ margin-top:6px; }
+.iosTitleRow{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  margin-bottom:10px;
+  gap:10px;
+  margin-bottom:8px;
 }
-.calPhoneTitle{
+.iosTitle{
   font-weight:900;
   font-size:16px;
-  text-transform: none;
+  letter-spacing:-0.01em;
+  text-transform: capitalize;
+}
+.iosIconBtn{
+  border:1px solid rgba(0,0,0,.12);
+  background:#fff;
+  border-radius:14px;
+  padding:8px 10px;
+  font:inherit;
+  font-weight:900;
+  cursor:pointer;
 }
 
-/* Month header row (Mon..Sun) */
-.calGrid2Head{
+/* Month grid */
+.iosGridHead{
   display:grid;
-  grid-template-columns:repeat(7, minmax(0,1fr));
+  grid-template-columns: repeat(7, minmax(0,1fr));
   gap:6px;
   margin-bottom:6px;
 }
-.calDow2{
+.iosDow{
   text-align:center;
   font-size:11px;
-  color:var(--muted);
-  font-weight:800;
+  color: rgba(0,0,0,.55);
+  font-weight:900;
 }
 
-/* Month cells */
-.calGrid2{
+.iosGrid{
   display:grid;
-  grid-template-columns:repeat(7, minmax(0,1fr));
+  grid-template-columns: repeat(7, minmax(0,1fr));
   gap:6px;
 }
-.calCell2{
-  border:1px solid rgba(0,0,0,.08);
-  background:#fff;
-  border-radius:14px;
-  min-height:54px;
-  padding:8px 6px;
-  text-align:left;
+
+/* Day cell: make it feel like iOS */
+.iosDay{
+  border:0;
+  background: transparent;
+  border-radius:16px;
+  min-height:58px;
+  padding:6px 4px;
+  text-align:center;
   display:flex;
   flex-direction:column;
-  justify-content:space-between;
+  justify-content:flex-start;
+  align-items:center;
+  position:relative;
 }
-.calCell2.dim{ opacity:.45; }
-.calCell2.today{ border-color: rgba(0,0,0,.20); }
-.calCell2.sel{
-  box-shadow: 0 0 0 3px rgba(0,0,0,.10);
-}
-.calCell2.bad{ border-color: rgba(176,0,32,.35); }
+.iosDay.dim{ opacity:.40; }
 
-.calNum{
+/* Number becomes a circle */
+.iosNum{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   font-weight:900;
   font-size:13px;
   line-height:1;
 }
-.calDots{
+
+/* Selected day: filled circle (iOS-like) */
+.iosDay.sel .iosNum{
+  background:#0b0b0b;
+  color:#fff;
+}
+
+/* Today: thin ring circle */
+.iosDay.today .iosNum{
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.18);
+}
+
+/* If today is selected, keep filled circle */
+.iosDay.today.sel .iosNum{
+  box-shadow:none;
+}
+
+/* Overdue hint: subtle red ring */
+.iosDay.bad .iosNum{
+  box-shadow: inset 0 0 0 2px rgba(176,0,32,.22);
+}
+.iosDay.bad.sel .iosNum{
+  box-shadow:none; /* selected wins */
+}
+
+/* Dots under number */
+.iosDots{
+  margin-top:6px;
   display:flex;
   gap:4px;
-  height:10px;
   align-items:center;
+  height:10px;
 }
-.calDot{
+.iosDot{
   width:6px;
   height:6px;
   border-radius:999px;
   background: rgba(0,0,0,.55);
 }
+.iosDot.ghost{ background: rgba(0,0,0,.10); }
 
 /* Week strip */
-.weekStrip{
+.iosWeekStrip{
   display:grid;
-  grid-template-columns:repeat(7, minmax(0,1fr));
-  gap:8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap:6px;
 }
-.weekDay{
-  border:1px solid rgba(0,0,0,.08);
-  background:#fff;
-  border-radius:14px;
+
+.iosWeekDay{
+  border:0;
+  background: transparent;
+  border-radius:16px;
   padding:10px 6px;
   text-align:center;
+  position:relative;
 }
-.weekDay.today{ border-color: rgba(0,0,0,.20); }
-.weekDay.sel{ box-shadow: 0 0 0 3px rgba(0,0,0,.10); }
-.weekDay.bad{ border-color: rgba(176,0,32,.35); }
 
-.weekDow{
+.iosWeekDow{
   font-size:11px;
-  color:var(--muted);
-  font-weight:800;
+  color: rgba(0,0,0,.60);
+  font-weight:900;
 }
-.weekNum{
+
+.iosWeekNum{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  margin:6px auto 0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   font-size:15px;
   font-weight:900;
 }
-.weekMiniDots{
-  height:8px;
-  display:flex;
-  justify-content:center;
-}
-.weekDot{
+
+.iosWeekDot{
   width:6px;
   height:6px;
   border-radius:999px;
+  margin:6px auto 0;
   background: rgba(0,0,0,.55);
 }
+.iosWeekDot.ghost{ background: rgba(0,0,0,.12); }
+
+/* Selected in week: filled circle on number */
+.iosWeekDay.sel .iosWeekNum{
+  background:#0b0b0b;
+  color:#fff;
+}
+.iosWeekDay.sel .iosWeekDow{ color:#0b0b0b; } /* iOS keeps DOW dark; you can change to white if you prefer */
+
+/* Today in week: thin ring */
+.iosWeekDay.today .iosWeekNum{
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.18);
+}
+.iosWeekDay.today.sel .iosWeekNum{
+  box-shadow:none;
+}
+
+/* Overdue hint in week */
+.iosWeekDay.bad .iosWeekNum{
+  box-shadow: inset 0 0 0 2px rgba(176,0,32,.22);
+}
+.iosWeekDay.bad.sel .iosWeekNum{
+  box-shadow:none;
+}
+
+/* If selected, dots become light */
+.iosWeekDay.sel .iosWeekDot{ background:#fff; }
+.iosWeekDay.sel .iosWeekDot.ghost{ background: rgba(255,255,255,.35); }
+
+/* Year grid */
+.iosYearGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:10px;
+}
+@media (min-width: 980px){
+  .iosYearGrid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+.iosMiniMonth{
+  border:1px solid rgba(0,0,0,.10);
+  background:#fff;
+  border-radius:18px;
+  padding:14px;
+  text-align:left;
+}
+.iosMiniTitle{ font-weight:900; }
 
 /* Agenda */
-.agendaList{
+.iosAgenda{ display:flex; flex-direction:column; gap:10px; }
+.iosAgendaHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+}
+.iosAgendaTitle{ font-weight:900; font-size:16px; }
+.iosAgendaDate{ font-size:12px; color: rgba(0,0,0,.60); font-weight:800; }
+
+.iosAgendaList{
   display:flex;
   flex-direction:column;
   gap:8px;
   margin-top:8px;
 }
-.agendaRow{
-  border:1px solid rgba(0,0,0,.10);
-  background:#fff;
-  border-radius:14px;
-  padding:10px 12px;
+
+.iosAgendaRow{
+  border:0;
+  background: rgba(0,0,0,.04);
+  border-radius:16px;
+  padding:12px;
   text-align:left;
 }
-.agendaChip{ width:100%; font:inherit; }
-.agendaChip.overdue{ border-color: rgba(176,0,32,.35); }
+.iosAgendaBtn{ width:100%; cursor:pointer; }
+.iosAgendaBtn.bad{ outline: 2px solid rgba(176,0,32,.20); }
 
-.agendaHabit{
+.iosAgendaHabit{
   display:flex;
   gap:10px;
   align-items:center;
+  width:100%;
 }
-.agendaChip.habit{
+.iosAgendaText{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.iosAgendaMain{ font-weight:900; }
+.iosAgendaSub{ font-size:12px; color: rgba(0,0,0,.60); font-weight:700; }
+
+.iosTag{
+  font-size:11px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.10);
+  background:#fff;
+  font-weight:900;
+  text-transform: lowercase;
+}
+.iosTag.bad{ border-color: rgba(176,0,32,.35); }
+
+/* Filters sheet */
+.iosSheetBackdrop{
+  position:fixed;
+  inset:0;
+  background: rgba(0,0,0,.35);
+  z-index:9998;
+}
+.iosSheet{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  background:#fff;
+  border-top-left-radius:22px;
+  border-top-right-radius:22px;
+  padding:12px 14px calc(14px + env(safe-area-inset-bottom));
+  box-shadow: 0 -18px 40px rgba(0,0,0,.18);
+}
+.iosSheetGrab{
+  width:44px;
+  height:5px;
+  border-radius:999px;
+  background: rgba(0,0,0,.18);
+  margin: 6px auto 10px;
+}
+.iosSheetTitle{
+  font-weight:900;
+  font-size:16px;
+  margin-bottom:8px;
+}
+.iosCheckRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 8px;
+  border-radius:14px;
+  background: rgba(0,0,0,.03);
+  margin-top:8px;
   font-weight:800;
 }
 
-/* Year mini months grid */
-.miniMonthsGrid{
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0,1fr));
-  gap:10px;
-}
-@media (min-width: 980px){
-  .miniMonthsGrid{ grid-template-columns:repeat(4, minmax(0,1fr)); }
-}
-.miniMonth{
-  text-align:left;
-  padding:14px;
-}
-.miniMonthTitle{
-  font-weight:900;
-}
+/* Swipe-friendly */
+.calSwipeArea{ touch-action: pan-y; }
 
-/* Swipe-friendly: allow vertical scroll, we detect horizontal swipe in JS */
-.calSwipeArea { touch-action: pan-y; }
-
-/* Utility: hidden */
+/* Utility */
 .hidden{ display:none !important; }
