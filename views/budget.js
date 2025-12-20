@@ -3,58 +3,54 @@ window.Views = window.Views || {};
 window.Views.budget = ({ db, App, setPrimary }) => {
   const yr = App.getYearModel(db);
   const year = App.getCurrentYear(db);
+  const CUR = db.settings.currency || "RON";
 
   App.setCrumb(`Budget • ${year}`);
   setPrimary("+ Add Tx", () => document.getElementById("txAmount")?.focus());
 
   // Categories per-year
-  yr.categories = yr.categories || { goals:[], habits:[], budgetIncome:[], budgetExpense:[] };
+  yr.categories = yr.categories || { goals: [], habits: [], budgetIncome: [], budgetExpense: [] };
   yr.categories.budgetIncome = Array.isArray(yr.categories.budgetIncome) ? yr.categories.budgetIncome : [];
   yr.categories.budgetExpense = Array.isArray(yr.categories.budgetExpense) ? yr.categories.budgetExpense : [];
 
-  const budget = yr.budget;
-  budget.accounts = budget.accounts || [];
-  budget.transactions = budget.transactions || [];
-  budget.recurringRules = budget.recurringRules || [];
+  const budget = yr.budget || (yr.budget = { accounts: [], transactions: [], recurringRules: [] });
+  budget.accounts = Array.isArray(budget.accounts) ? budget.accounts : [];
+  budget.transactions = Array.isArray(budget.transactions) ? budget.transactions : [];
+  budget.recurringRules = Array.isArray(budget.recurringRules) ? budget.recurringRules : [];
 
   const today = dbTodayISO();
+  const fmt = new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-  function monthKey(iso){ return iso.slice(0,7); } // YYYY-MM
+  function monthKey(iso) { return (iso || "").slice(0, 7); } // YYYY-MM
   const curMonth = monthKey(today);
 
-  function txSigned(tx){
-    if (tx.type === "income") return +tx.amount;
-    if (tx.type === "expense") return -tx.amount;
-    return 0;
-  }
-
-  function monthTotals(month){
-    const txs = budget.transactions.filter(t => monthKey(t.date) === month);
-    let inc=0, exp=0;
-    for (const t of txs) {
-      if (t.type === "income") inc += t.amount;
-      else if (t.type === "expense") exp += t.amount;
-    }
-    return { inc, exp, net: inc-exp, count: txs.length };
-  }
-
-  function catLabel(kind, id){
-    const arr = kind==="income" ? yr.categories.budgetIncome : yr.categories.budgetExpense;
-    const c = arr.find(x=>x.id===id);
+  function catLabel(kind, id) {
+    const arr = kind === "income" ? yr.categories.budgetIncome : yr.categories.budgetExpense;
+    const c = arr.find(x => x.id === id);
     return c ? c.name : "Uncategorized";
   }
 
-  function ensureMonthGenerated(month){
-    // Very simple generator for recurring rules: monthly on dayOfMonth
-    // Avoid duplicates by checking (ruleId + date + amount + categoryId + type)
+  function monthTotals(month) {
+    const txs = budget.transactions.filter(t => monthKey(t.date) === month);
+    let inc = 0, exp = 0;
+    for (const t of txs) {
+      if (t.type === "income") inc += Number(t.amount || 0);
+      else if (t.type === "expense") exp += Number(t.amount || 0);
+    }
+    return { inc, exp, net: inc - exp, count: txs.length };
+  }
+
+  function ensureMonthGenerated(month) {
+    // Simple generator for recurring rules (monthly only)
     const start = `${month}-01`;
-    const lastDay = new Date(Number(month.slice(0,4)), Number(month.slice(5,7)), 0).getDate();
+    const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+
     for (const r of budget.recurringRules) {
-      const sched = r.schedule || {kind:"monthly", dayOfMonth:1, interval:1};
+      const sched = r.schedule || { kind: "monthly", dayOfMonth: 1, interval: 1 };
       if (sched.kind !== "monthly") continue;
 
       const dom = Math.max(1, Math.min(lastDay, Number(sched.dayOfMonth || 1)));
-      const date = `${month}-${String(dom).padStart(2,"0")}`;
+      const date = `${month}-${String(dom).padStart(2, "0")}`;
 
       const sig = `${r.id}|${date}|${r.type}|${r.amount}|${r.categoryId}|${r.accountId}`;
       const exists = budget.transactions.some(t => t._sig === sig);
@@ -74,32 +70,44 @@ window.Views.budget = ({ db, App, setPrimary }) => {
     }
   }
 
+  // Generate recurring tx for current month (idempotent)
   ensureMonthGenerated(curMonth);
   dbSave(db);
 
   const totals = monthTotals(curMonth);
 
-  const accountOptions = budget.accounts.map(a=>`<option value="${App.esc(a.id)}">${App.esc(a.name)}</option>`).join("");
+  const accountOptions = budget.accounts.map(a =>
+    `<option value="${App.esc(a.id)}">${App.esc(a.name)}</option>`
+  ).join("");
 
   const incomeCatOptions = [`<option value="">Uncategorized</option>`]
-    .concat(yr.categories.budgetIncome.filter(c=>!c.archived).map(c=>`<option value="${App.esc(c.id)}">${App.esc(c.name)}</option>`))
+    .concat(yr.categories.budgetIncome.filter(c => !c.archived).map(c =>
+      `<option value="${App.esc(c.id)}">${App.esc(c.name)}</option>`
+    ))
     .join("");
 
   const expenseCatOptions = [`<option value="">Uncategorized</option>`]
-    .concat(yr.categories.budgetExpense.filter(c=>!c.archived).map(c=>`<option value="${App.esc(c.id)}">${App.esc(c.name)}</option>`))
+    .concat(yr.categories.budgetExpense.filter(c => !c.archived).map(c =>
+      `<option value="${App.esc(c.id)}">${App.esc(c.name)}</option>`
+    ))
     .join("");
 
-  function txRow(t){
+  function txRow(t) {
     const sign = t.type === "income" ? "+" : (t.type === "expense" ? "-" : "");
-    const cat = (t.type==="income") ? catLabel("income", t.categoryId) : (t.type==="expense") ? catLabel("expense", t.categoryId) : "Transfer";
+    const cat =
+      (t.type === "income") ? catLabel("income", t.categoryId) :
+      (t.type === "expense") ? catLabel("expense", t.categoryId) : "Transfer";
+
+    const accName = budget.accounts.find(a => a.id === t.accountId)?.name || "";
+
     return `
       <div class="card glass2 stack" style="padding:12px">
         <div class="row" style="justify-content:space-between">
-          <div style="font-weight:900">${App.esc(t.date)} • ${App.esc(t.type.toUpperCase())}</div>
-          <div style="font-weight:900">${sign}${App.esc(String(t.amount))} RON</div>
+          <div style="font-weight:900">${App.esc(t.date)} • ${App.esc(String(t.type).toUpperCase())}</div>
+          <div style="font-weight:900">${sign}${App.esc(fmt.format(Number(t.amount || 0)))} ${App.esc(CUR)}</div>
         </div>
-        <div class="muted">${App.esc(cat)} • ${App.esc(budget.accounts.find(a=>a.id===t.accountId)?.name || "")}</div>
-        <div class="muted">${App.esc(t.note||"")}</div>
+        <div class="muted">${App.esc(cat)} • ${App.esc(accName)}</div>
+        <div class="muted">${App.esc(t.note || "")}</div>
         <div class="row" style="margin-top:8px">
           <button class="btn small danger" onclick="(function(){
             if(!confirm('Delete transaction?')) return;
@@ -119,14 +127,13 @@ window.Views.budget = ({ db, App, setPrimary }) => {
         <div class="heroGlow"></div>
         <div>
           <div class="kpi">Budget</div>
-          <div class="muted">Pro: Accounts • Transactions • Recurring bills • RON</div>
+          <div class="muted">Accounts • Transactions • Recurring bills • Currency: <b>${App.esc(CUR)}</b></div>
           <div class="row" style="margin-top:10px">
-            <span class="pill">${App.esc(curMonth)} income <b>${Math.round(totals.inc)}</b></span>
-            <span class="pill">${App.esc(curMonth)} expense <b>${Math.round(totals.exp)}</b></span>
-            <span class="pill">net <b>${Math.round(totals.net)}</b></span>
+            <span class="pill">${App.esc(curMonth)} income <b>${App.esc(fmt.format(totals.inc))}</b></span>
+            <span class="pill">${App.esc(curMonth)} expense <b>${App.esc(fmt.format(totals.exp))}</b></span>
+            <span class="pill">net <b>${App.esc(fmt.format(totals.net))}</b></span>
           </div>
         </div>
-        ${App.heroSVG()}
       </div>
 
       <div class="card big stack">
@@ -140,14 +147,17 @@ window.Views.budget = ({ db, App, setPrimary }) => {
               <option value="transfer">Transfer</option>
             </select>
           </div>
+
           <div>
-            <div class="muted">Amount (RON)</div>
+            <div class="muted">Amount (${App.esc(CUR)})</div>
             <input id="txAmount" type="number" class="input" placeholder="e.g. 250" />
           </div>
+
           <div>
             <div class="muted">Date</div>
             <input id="txDate" type="date" class="input" value="${App.esc(today)}" />
           </div>
+
           <div>
             <div class="muted">Account</div>
             <select id="txAccount" class="input">${accountOptions}</select>
@@ -179,9 +189,9 @@ window.Views.budget = ({ db, App, setPrimary }) => {
         </div>
 
         <div class="stack" style="gap:12px; margin-top:12px">
-          ${(budget.transactions||[])
-            .filter(t=>monthKey(t.date)===curMonth)
-            .sort((a,b)=>b.date.localeCompare(a.date))
+          ${(budget.transactions || [])
+            .filter(t => monthKey(t.date) === curMonth)
+            .sort((a, b) => String(b.date).localeCompare(String(a.date)))
             .map(txRow).join("") || `<div class="muted">No transactions this month.</div>`}
         </div>
       </div>
@@ -192,11 +202,18 @@ window.Views.budget = ({ db, App, setPrimary }) => {
   const txTypeEl = document.getElementById("txType");
   const txCatEl = document.getElementById("txCategory");
   const catWrap = document.getElementById("catWrap");
-  function syncCategoryOptions(){
+
+  function syncCategoryOptions() {
     const t = txTypeEl.value;
-    if (t === "income") { catWrap.style.display="block"; txCatEl.innerHTML = incomeCatOptions; }
-    else if (t === "expense") { catWrap.style.display="block"; txCatEl.innerHTML = expenseCatOptions; }
-    else { catWrap.style.display="none"; }
+    if (t === "income") {
+      catWrap.style.display = "block";
+      txCatEl.innerHTML = incomeCatOptions;
+    } else if (t === "expense") {
+      catWrap.style.display = "block";
+      txCatEl.innerHTML = expenseCatOptions;
+    } else {
+      catWrap.style.display = "none";
+    }
   }
   txTypeEl.onchange = syncCategoryOptions;
   syncCategoryOptions();
@@ -211,9 +228,9 @@ window.Views.budget = ({ db, App, setPrimary }) => {
 
     if (!Number.isFinite(amount) || amount <= 0) return alert("Amount must be > 0");
 
-    const db = dbLoad();
-    const yr = App.getYearModel(db);
-    yr.budget.transactions.push({
+    const db2 = dbLoad();
+    const yr2 = App.getYearModel(db2);
+    yr2.budget.transactions.push({
       id: dbUid(),
       type,
       amount,
@@ -223,7 +240,7 @@ window.Views.budget = ({ db, App, setPrimary }) => {
       note,
       createdAt: today
     });
-    dbSave(db);
+    dbSave(db2);
     App.toast("Transaction added");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   };
@@ -231,32 +248,36 @@ window.Views.budget = ({ db, App, setPrimary }) => {
   document.getElementById("addRecurringBtn").onclick = () => {
     const kind = prompt("Recurring (monthly) type: income or expense?", "expense");
     if (!kind) return;
-    const type = (kind.toLowerCase()==="income") ? "income" : "expense";
-    const amount = Number(prompt("Amount (RON):", "100") || "0");
-    if (!Number.isFinite(amount) || amount<=0) return alert("Invalid amount");
+    const type = (kind.toLowerCase() === "income") ? "income" : "expense";
+
+    const amount = Number(prompt(`Amount (${CUR}):`, "100") || "0");
+    if (!Number.isFinite(amount) || amount <= 0) return alert("Invalid amount");
+
     const dayOfMonth = Number(prompt("Day of month (1-31):", "1") || "1");
     const note = prompt("Note (optional):", "Recurring") || "";
 
-    // pick category
-    let categoryId = "";
-    if (type === "income") {
-      categoryId = prompt("Category name (will be created if missing):", "Salary") || "";
-      if (categoryId) {
-        let c = yr.categories.budgetIncome.find(x=>x.name.toLowerCase()===categoryId.toLowerCase());
-        if (!c) { c = { id: dbUid(), name: categoryId, archived:false }; yr.categories.budgetIncome.push(c); }
-        categoryId = c.id;
-      }
-    } else {
-      categoryId = prompt("Category name (will be created if missing):", "Rent") || "";
-      if (categoryId) {
-        let c = yr.categories.budgetExpense.find(x=>x.name.toLowerCase()===categoryId.toLowerCase());
-        if (!c) { c = { id: dbUid(), name: categoryId, archived:false }; yr.categories.budgetExpense.push(c); }
-        categoryId = c.id;
-      }
-    }
+    // Pick/create category by name for speed
+    let categoryName = prompt("Category name (will be created if missing):", type === "income" ? "Salary" : "Rent") || "";
+    categoryName = categoryName.trim();
 
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+
+    yr2.categories = yr2.categories || { goals: [], habits: [], budgetIncome: [], budgetExpense: [] };
+    yr2.categories.budgetIncome = Array.isArray(yr2.categories.budgetIncome) ? yr2.categories.budgetIncome : [];
+    yr2.categories.budgetExpense = Array.isArray(yr2.categories.budgetExpense) ? yr2.categories.budgetExpense : [];
+
+    let categoryId = "";
+    if (categoryName) {
+      const arr = type === "income" ? yr2.categories.budgetIncome : yr2.categories.budgetExpense;
+      let c = arr.find(x => String(x.name || "").toLowerCase() === categoryName.toLowerCase());
+      if (!c) {
+        c = { id: dbUid(), name: categoryName, archived: false };
+        arr.push(c);
+      }
+      categoryId = c.id;
+    }
+
     yr2.budget.recurringRules.push({
       id: dbUid(),
       type,
@@ -264,11 +285,12 @@ window.Views.budget = ({ db, App, setPrimary }) => {
       accountId: yr2.budget.accounts[0]?.id || "",
       categoryId,
       note,
-      schedule: { kind:"monthly", dayOfMonth: Math.max(1, Math.min(31, dayOfMonth)), interval: 1 },
+      schedule: { kind: "monthly", dayOfMonth: Math.max(1, Math.min(31, dayOfMonth)), interval: 1 },
       startDate: "",
       endDate: "",
       lastGeneratedThrough: ""
     });
+
     dbSave(db2);
     App.toast("Recurring rule added");
     window.dispatchEvent(new HashChangeEvent("hashchange"));
