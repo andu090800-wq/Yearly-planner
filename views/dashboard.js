@@ -7,10 +7,9 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
     const y = prompt("Add year (e.g. 2026):");
     if (!y) return;
     const n = Number(y);
-
     try {
       const db2 = dbLoad();
-      dbAddYear(db2, n);                 // creates the year + sets currentYear
+      dbAddYear(db2, n);
       App.toast(`Year ${n} added`);
       App.navTo(`#/year/${n}`);
     } catch (e) {
@@ -26,7 +25,10 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
         <div class="stack" style="gap:8px">
           <div class="title">Plans</div>
           <div class="muted">Add your years manually • Everything stays on-device</div>
+
           <div class="row" style="margin-top:6px">
+            <span class="pill">Today <b>${App.esc(dbTodayISO())}</b></span>
+
             <label class="pill" style="gap:10px">
               Currency
               <select id="currencySelect" class="input inputMini">
@@ -37,10 +39,6 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
             </label>
           </div>
         </div>
-
-        <div class="row">
-          <button class="btn" id="addYearBtn">+ Add Year</button>
-        </div>
       </div>
     </div>
   `;
@@ -48,10 +46,7 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
   const empty = `
     <div class="card big stack">
       <div class="title2">No years yet</div>
-      <div class="muted">Create your first year (e.g. 2026) and start adding goals, habits, tasks and budget.</div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn" id="emptyAddYearBtn">+ Add Year</button>
-      </div>
+      <div class="muted">Tap <b>+ Add Year</b> (top right) to create your first plan year.</div>
     </div>
   `;
 
@@ -65,14 +60,38 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
       <div class="card cardTap stack">
         <div class="yearBig">${App.esc(String(y))}</div>
         <div class="muted">Goals: ${goals} • Habits: ${habits} • Tx: ${tx}</div>
-        <div class="row" style="margin-top:10px">
-          <button class="btn secondary" onclick="location.hash='#/year/${y}'">Open</button>
-          <button class="btn" onclick="(function(){
+
+        <div class="row" style="margin-top:10px; gap:8px">
+          <button class="btn secondary small" onclick="location.hash='#/year/${y}'">Open</button>
+
+          <button class="btn small" onclick="(function(){
             const db=dbLoad();
             db.settings.currentYear=${y};
             dbSave(db);
             location.hash='#/goals';
           })()">Use</button>
+
+          <button class="btn danger small" onclick="(function(){
+            const year=${y};
+
+            if(!confirm('Delete year ' + year + ' and ALL its data?')) return;
+
+            const typed = prompt('Type the year (' + year + ') to confirm deletion:');
+            if(String(typed).trim() !== String(year)) {
+              alert('Cancelled. Year not deleted.');
+              return;
+            }
+
+            const db=dbLoad();
+            try {
+              dbDeleteYear(db, year);
+              alert('Year ' + year + ' deleted.');
+              location.hash = '#/dashboard';
+              window.dispatchEvent(new HashChangeEvent('hashchange'));
+            } catch(e){
+              alert(e.message);
+            }
+          })()">Delete</button>
         </div>
       </div>
     `;
@@ -81,14 +100,14 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
   App.viewEl.innerHTML = `
     <div class="stack">
       ${header}
+
       ${years.length ? `
         <div class="card big stack">
-          <div class="row" style="justify-content:space-between">
-            <div>
-              <div class="title2">Years</div>
-              <div class="muted">Tap a year to open its dashboard.</div>
-            </div>
+          <div>
+            <div class="title2">Years</div>
+            <div class="muted">Tap a year to open its dashboard.</div>
           </div>
+
           <div class="gridYears" style="margin-top:12px">
             ${yearCards}
           </div>
@@ -97,7 +116,6 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
     </div>
   `;
 
-  // Wire currency selector
   const sel = document.getElementById("currencySelect");
   sel.value = db.settings.currency || "RON";
   sel.onchange = () => {
@@ -105,24 +123,6 @@ window.Views.dashboard = ({ db, App, setPrimary }) => {
     db2.settings.currency = sel.value;
     dbSave(db2);
     App.toast("Currency updated");
-    // refresh current view to reflect changes in other modules later
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   };
-
-  // Wire add-year buttons
-  const add = () => {
-    const y = prompt("Add year (e.g. 2026):");
-    if (!y) return;
-    const n = Number(y);
-    try {
-      const db2 = dbLoad();
-      dbAddYear(db2, n);
-      App.toast(`Year ${n} added`);
-      App.navTo(`#/year/${n}`);
-    } catch (e) { alert(e.message); }
-  };
-
-  document.getElementById("addYearBtn").onclick = add;
-  const emptyBtn = document.getElementById("emptyAddYearBtn");
-  if (emptyBtn) emptyBtn.onclick = add;
 };
