@@ -1,75 +1,92 @@
 <!doctype html>
-<html lang="en">
+<html lang="ro">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Plans</title>
+
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <div class="appShell">
-    <aside class="sidebar">
-      <div class="sideTop">
-        <div class="logo">
-          <div class="logoMark"></div>
-          <div>
-            <div class="logoTitle">Plans</div>
-            <div class="logoSub">Glass dashboard</div>
-          </div>
-        </div>
-
-        <nav class="nav">
-          <a href="#/dashboard" class="navLink">Dashboard</a>
-          <a href="#/year/2026" class="navLink">2026</a>
-          <a href="#/year/2026/habits-calendar" class="navLink">Habits</a>
-          <a href="#/year/2026/goals-dashboard" class="navLink">Goals</a>
-          <a href="#/year/2026/budget" class="navLink">Budget</a>
-          <a href="#/year/2026/plans" class="navLink">Plans</a>
-        </nav>
-      </div>
-
-      <div class="sideBottom">
-        <button id="exportBtn" class="btn secondary small">Export</button>
-        <button id="importBtn" class="btn secondary small">Import</button>
-        <input id="importFile" type="file" accept="application/json" class="hidden" />
-        <button id="wipeBtn" class="btn danger small">Wipe</button>
-        <div class="muted tiny">Local-only data (this device)</div>
-      </div>
-    </aside>
-
+  <div class="shell">
     <main class="main">
-      <header class="topbar glass">
-        <div class="topbar-left">
+      <header class="top glass">
+        <div class="topLeft">
           <div class="brand">Plans</div>
           <div id="crumb" class="crumb">Dashboard</div>
         </div>
 
-        <div class="topbar-right">
-          <!-- mobile quick nav -->
-          <a class="chip" href="#/dashboard">Home</a>
-          <a class="chip" href="#/year/2026">2026</a>
-          <a class="chip" href="#/year/2026/habits-yearly">Heatmap</a>
+        <div class="topRight">
+          <button id="primaryActionBtn" class="btn">+ Add</button>
         </div>
       </header>
 
-      <section class="container">
+      <section class="content">
         <div id="view"></div>
       </section>
 
-      <footer class="footer">
-        <span>Offline-ready • Black & White • Charts included</span>
-      </footer>
+      <!-- Mobile bottom tabs -->
+      <nav class="tabs glass" aria-label="Bottom navigation">
+        <a class="tab" href="#/dashboard">Dashboard</a>
+        <a class="tab" href="#/calendar">Calendar</a>
+        <a class="tab" href="#/goals">Goals</a>
+        <a class="tab" href="#/habits">Habits</a>
+        <a class="tab" href="#/budget">Budget</a>
+        <a class="tab" href="#/more">More</a>
+      </nav>
     </main>
+
+    <!-- Right sidebar (25%) -->
+    <aside class="rightbar glass">
+      <div class="rbSection">
+        <div class="rbTitle">Menu</div>
+        <a class="rbLink" href="#/dashboard">Dashboard</a>
+        <a class="rbLink" href="#/calendar">Calendar</a>
+        <a class="rbLink" href="#/goals">Goals</a>
+        <a class="rbLink" href="#/habits">Habits</a>
+        <a class="rbLink" href="#/budget">Budget</a>
+        <a class="rbLink" href="#/analytics">Analytics</a>
+      </div>
+
+      <div class="rbSection">
+        <div class="rbTitle">Account</div>
+        <a class="rbLink" href="#/account">Account</a>
+        <a class="rbLink" href="#/notifications">Notifications</a>
+        <a class="rbLink" href="#/payment">Payment method</a>
+        <a class="rbLink" href="#/settings">Settings</a>
+      </div>
+
+      <div class="rbSection">
+        <div class="rbTitle">Data</div>
+        <div class="row">
+          <button id="exportBtn" class="btn secondary small">Export</button>
+          <button id="importBtn" class="btn secondary small">Import</button>
+        </div>
+        <input id="importFile" type="file" accept="application/json" class="hidden" />
+        <button id="wipeBtn" class="btn danger small">Wipe</button>
+        <div class="muted tiny">Local-only (device)</div>
+      </div>
+    </aside>
   </div>
 
-  <!-- Charts (free) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <div id="toast" class="toast hidden"></div>
 
+  <!-- Core DB -->
+  <script src="db.js"></script>
+
+  <!-- Views (modular) -->
+  <script src="views/dashboard.js"></script>
+  <script src="views/yearHome.js"></script>
+  <script src="views/goals.js"></script>
+  <script src="views/goalDetail.js"></script>
+
+  <!-- Router/App -->
   <script src="app.js"></script>
 
+  <!-- PWA -->
   <script>
-    // optional PWA
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(()=>{});
     }
