@@ -1,0 +1,8 @@
+{
+  "name": "Plans Dashboard",
+  "short_name": "Plans",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111111"
+}
