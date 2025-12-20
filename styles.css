@@ -634,3 +634,102 @@ textarea:focus{
 
 /* Hide the old count badge if it still exists somewhere */
 .calBadge{ display:none !important; }
+/* ===== Calendar layout fixes (your .cal* classes) ===== */
+
+/* Month header */
+.calMonthHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+}
+.calMonthTitle{
+  font-weight:900;
+  font-size:16px;
+  text-transform: capitalize;
+}
+
+/* IMPORTANT: grid for both header + body */
+.calGrid{
+  display:grid !important;
+  grid-template-columns: repeat(7, minmax(0,1fr)) !important;
+  gap:10px !important;
+}
+.calGridHead{ margin-top:8px; margin-bottom:8px; }
+
+.calDow{
+  text-align:center;
+  font-size:11px;
+  color: var(--muted);
+  font-weight:900;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+}
+
+/* iPhone-like month cells */
+.calCell{
+  border:0 !important;
+  background: transparent !important;
+  box-shadow:none !important;
+  padding:6px 2px !important;
+  border-radius:18px;
+  min-height:58px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  cursor:pointer;
+}
+.calCell.dim{ opacity:.38; }
+
+.calCellTop{ width:100%; display:flex; justify-content:center; }
+
+.calCellNum{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  font-size:13px;
+  line-height:1;
+}
+
+/* selected = filled */
+.calCell.sel .calCellNum{ background:#111; color:#fff; }
+
+/* today ring */
+.calCell.today .calCellNum{ box-shadow: inset 0 0 0 2px rgba(0,0,0,.20); }
+.calCell.today.sel .calCellNum{ box-shadow:none; }
+
+/* overdue ring */
+.calCell.bad .calCellNum{ box-shadow: inset 0 0 0 2px rgba(176,0,32,.22); }
+.calCell.bad.sel .calCellNum{ box-shadow:none; }
+
+/* dots */
+.calDots{
+  margin-top:6px;
+  display:flex;
+  gap:4px;
+  align-items:center;
+  height:10px;
+}
+.calDot{
+  width:6px; height:6px;
+  border-radius:999px;
+  background: rgba(0,0,0,.55);
+}
+.calDot.ghost{ background: rgba(0,0,0,.10); }
+
+/* hide old count badge if still in DOM */
+.calBadge{ display:none !important; }
+
+/* Year grid nicer */
+.calMonthsGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:10px;
+}
+.calMonthCard{ text-align:left; }
+.calMonthCardTitle{ font-weight:900; }
