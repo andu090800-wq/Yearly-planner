@@ -733,3 +733,131 @@ textarea:focus{
 }
 .calMonthCard{ text-align:left; }
 .calMonthCardTitle{ font-weight:900; }
+/* =========================
+   iPhone-like WEEK + AGENDA (calendar)
+   ========================= */
+
+.wkHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+}
+
+.wkStrip{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:10px;
+}
+
+.wkDay{
+  border:0;
+  background: transparent;
+  padding:6px 2px;
+  border-radius:18px;
+  text-align:center;
+}
+
+.wkDow{
+  font-size:11px;
+  color: var(--muted);
+  font-weight:900;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+}
+
+.wkNum{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  margin:6px auto 0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  font-size:15px;
+}
+
+/* selected = filled circle */
+.wkDay.sel .wkNum{
+  background:#111;
+  color:#fff;
+}
+
+/* today ring */
+.wkDay.today .wkNum{
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.20);
+}
+.wkDay.today.sel .wkNum{ box-shadow:none; }
+
+/* overdue ring */
+.wkDay.bad .wkNum{
+  box-shadow: inset 0 0 0 2px rgba(176,0,32,.22);
+}
+.wkDay.bad.sel .wkNum{ box-shadow:none; }
+
+.wkDot{
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  margin:6px auto 0;
+  background: rgba(0,0,0,.55);
+}
+.wkDot.ghost{ background: rgba(0,0,0,.12); }
+.wkDay.sel .wkDot{ background:#fff; }
+.wkDay.sel .wkDot.ghost{ background: rgba(255,255,255,.35); }
+
+/* Agenda */
+.agWrap{ display:flex; flex-direction:column; gap:10px; }
+.agHead{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+
+.agList{ display:flex; flex-direction:column; gap:10px; }
+
+.agRow{
+  border:1px solid var(--border);
+  border-radius:18px;
+  background: rgba(255,255,255,.92);
+  box-shadow: var(--shadow2);
+  padding:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  text-align:left;
+}
+
+.agBtn{ width:100%; cursor:pointer; }
+.agRow.bad{ box-shadow: 0 0 0 3px rgba(176,0,32,.10); }
+
+.agText{ display:flex; flex-direction:column; gap:2px; }
+.agTitle{ font-weight:900; }
+.agSub{ font-size:12px; color: var(--muted); font-weight:800; }
+
+.agTag{
+  font-size:11px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.85);
+  font-weight:900;
+  text-transform: lowercase;
+}
+.agTag.bad{ border-color: rgba(176,0,32,.35); }
+
+.agHabit{ display:flex; align-items:center; gap:10px; width:100%; }
+/* Year view: compact 12 tiles */
+.calMonthsGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:10px;
+}
+@media (min-width: 980px){
+  .calMonthsGrid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+.calMonthCard{
+  text-align:left;
+  padding:12px;
+}
+.calMonthCardTitle{
+  font-weight:900;
+}
