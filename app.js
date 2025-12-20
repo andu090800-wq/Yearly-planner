@@ -149,49 +149,46 @@
   render();
 
   function render() {
-    const db = dbLoad();
-    const parts = App.parseHash();
-    if (!parts.length) return App.navTo("#/dashboard");
+  const db = dbLoad();
+  const parts = App.parseHash();
+  if (!parts.length) return App.navTo("#/dashboard");
 
-    const route = parts[0];
-    setActiveNav(route);
+  const route = parts[0];
+  setActiveNav(route);
 
-    // ctx passed to views
-    const ctx = { db, App, setPrimary };
+  // ctx passed to views
+  const ctx = { db, App, setPrimary };
 
-    // Views registry
-    const Views = window.Views || {};
+  // Views registry
+  const Views = window.Views || {};
 
-    // Dispatch
-    if (route === "dashboard") return Views.dashboard?.(ctx);
+  // Dispatch (REAL views)
+  if (route === "dashboard") return Views.dashboard?.(ctx);
 
-    if (route === "year" && parts[1]) {
-      ctx.year = Number(parts[1]);
-      return Views.yearHome?.(ctx);
-    }
-
-    if (route === "goals") return Views.goals?.(ctx);
-
-    if (route === "goal" && parts[1]) {
-      ctx.goalId = parts[1];
-      return Views.goalDetail?.(ctx);
-    }
-
-    // Settings / More can be real later; for now placeholders are OK
-    if (route === "settings") return renderPlaceholder(ctx, "Settings", "Will include year switch + preferences.");
-    if (route === "more") return renderPlaceholder(ctx, "More", "Mobile quick links will live here.");
-
-    // Future modules placeholders
-    if (route === "calendar") return renderPlaceholder(ctx, "Calendar", "Weekly/Monthly/Yearly + filters (Etapa 3/4).");
-    if (route === "habits") return renderPlaceholder(ctx, "Habits", "Recurrence + streaks + heatmap (Etapa 3).");
-    if (route === "budget") return renderPlaceholder(ctx, "Budget", "Accounts + transactions + recurring bills (Etapa 5).");
-    if (route === "analytics") return renderPlaceholder(ctx, "Analytics", "Charts for goals/habits/budget (Etapa 5+).");
-
-    if (route === "account") return renderPlaceholder(ctx, "Account", "Local-only app (for now).");
-    if (route === "notifications") return renderPlaceholder(ctx, "Notifications", "In-app only (Etapa 4).");
-    if (route === "payment") return renderPlaceholder(ctx, "Payment method", "Placeholder (no payments in v1).");
-
-    // Unknown route
-    App.navTo("#/dashboard");
+  if (route === "year" && parts[1]) {
+    ctx.year = Number(parts[1]);
+    return Views.yearHome?.(ctx);
   }
+
+  if (route === "goals") return Views.goals?.(ctx);
+
+  if (route === "goal" && parts[1]) {
+    ctx.goalId = parts[1];
+    return Views.goalDetail?.(ctx);
+  }
+
+  if (route === "habits") return Views.habits?.(ctx);
+  if (route === "calendar") return Views.calendar?.(ctx);
+  if (route === "budget") return Views.budget?.(ctx);
+  if (route === "analytics") return Views.analytics?.(ctx);
+  if (route === "notifications") return Views.notifications?.(ctx);
+
+  if (route === "settings") return Views.settings?.(ctx);
+  if (route === "more") return Views.more?.(ctx);
+  if (route === "account") return Views.account?.(ctx);
+  if (route === "payment") return Views.payment?.(ctx);
+
+  // Unknown route
+  App.navTo("#/dashboard");
+}
 })();
