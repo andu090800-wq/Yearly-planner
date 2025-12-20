@@ -1,15 +1,15 @@
 /* db.js (FINAL)
    - Local-only storage (localStorage)
-   - Years are manual + isolated (per-year categories/data)
+   - No preset years: user creates years manually from Dashboard
+   - Global settings: currency (RON/EUR/USD), weekStartsOn Monday
    - Prepared for Goals, Habits (binary), Calendar, Budget Pro
-   - Includes safe migrations
+   - Includes safe normalization/migrations
 */
 
 const DB_KEY = "plans_app_db_v1";
 
 // ---------- Utils ----------
 function dbUid() {
-  // Prefer crypto UUID
   return (crypto?.randomUUID?.() || (Date.now() + "-" + Math.random().toString(16).slice(2)));
 }
 
@@ -19,10 +19,6 @@ function dbTodayISO() {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj));
 }
 
 // ---------- Defaults ----------
@@ -37,18 +33,19 @@ function defaultCategoriesPerYear() {
 
 function defaultBudgetPro() {
   return {
-    currency: "RON",
+    // Accounts
     accounts: [
       { id: dbUid(), name: "Bank", type: "bank" },
       { id: dbUid(), name: "Cash", type: "cash" },
       { id: dbUid(), name: "Savings", type: "savings" }
     ],
+
     // Transactions (Pro):
-    // { id, type: "income"|"expense"|"transfer", amount, date, accountId, toAccountId?, categoryId?, note?, createdAt }
+    // { id, type:"income"|"expense"|"transfer", amount, date, accountId, toAccountId?, categoryId?, note?, createdAt }
     transactions: [],
+
     // Recurring rules:
     // { id, type:"income"|"expense", amount, accountId, categoryId, note?, schedule, startDate?, endDate?, lastGeneratedThrough? }
-    // schedule: { kind:"monthly"|"weekly"|"weekdays"|"daysOfWeek"|"everyNDays", interval?, daysOfWeek?[], dayOfMonth? }
     recurringRules: []
   };
 }
@@ -57,7 +54,6 @@ function defaultYearModel(yearNum) {
   return {
     year: Number(yearNum),
 
-    // per-year categories (your decision)
     categories: defaultCategoriesPerYear(),
 
     // Goals:
@@ -67,15 +63,15 @@ function defaultYearModel(yearNum) {
     // }
     goals: [],
 
-    // Habits (binary only):
-    // { id, title, categoryId, notes?, recurrenceRule, checks:{[isoDate]:true}, linkedGoalIds:[] }
+    // Habits (binary):
+    // { id, title, categoryId, notes?, recurrenceRule, checks:{[isoDate]:true}, linkedGoalIds:[], createdAt }
     habits: [],
 
-    // Calendar preferences (optional; can be expanded later)
+    // Calendar preferences
     calendar: {
-      defaultView: "week",      // "week" | "month" | "year"
-      filters: { tasks:true, habits:true, milestones:true, goals:true },
-      focus: { type:"all", id:"" } // {type:"all"|"goal"|"habit", id}
+      defaultView: "week", // "week" | "month" | "year"
+      filters: { tasks: true, habits: true, milestones: true, goals: true },
+      focus: { type: "all", id: "" } // {type:"all"|"goal"|"habit", id}
     },
 
     // Budget Pro
@@ -87,24 +83,19 @@ function dbFresh() {
   return {
     version: 1,
     settings: {
-      currency: "RON",
-      weekStartsOn: "monday",
-      currentYear: 2026
+      currency: "RON",        // user can change to EUR/USD
+      weekStartsOn: "monday", // fixed per your preference
+      currentYear: null       // becomes number when first year created
     },
-    yearsOrder: [2026, 2027, 2028],
-    years: {
-      "2026": defaultYearModel(2026),
-      "2027": defaultYearModel(2027),
-      "2028": defaultYearModel(2028)
-    }
+    yearsOrder: [],
+    years: {}
   };
 }
 
-// ---------- Migrations / Normalization ----------
+// ---------- Normalization ----------
 function normalizeYearModel(yearModel, yearNumFallback) {
   const y = Number(yearModel?.year ?? yearNumFallback);
   const out = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
-
   out.year = y;
 
   // Categories
@@ -115,8 +106,7 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   c.budgetIncome = Array.isArray(c.budgetIncome) ? c.budgetIncome : [];
   c.budgetExpense = Array.isArray(c.budgetExpense) ? c.budgetExpense : [];
 
-  // Ensure category items shape
-  for (const k of ["goals","habits","budgetIncome","budgetExpense"]) {
+  for (const k of ["goals", "habits", "budgetIncome", "budgetExpense"]) {
     c[k] = c[k].map(x => ({
       id: String(x?.id || dbUid()),
       name: String(x?.name || "Category"),
@@ -159,33 +149,34 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     notes: String(h?.notes || ""),
     recurrenceRule: (h?.recurrenceRule && typeof h.recurrenceRule === "object")
       ? h.recurrenceRule
-      : { kind: "daily" }, // placeholder default; engine comes in Habits stage
-    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {}, // { "YYYY-MM-DD": true }
-    linkedGoalIds: Array.isArray(h?.linkedGoalIds) ? h.linkedGoalIds.map(String) : []
+      : { kind: "weekdays" },
+    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {},
+    linkedGoalIds: Array.isArray(h?.linkedGoalIds) ? h.linkedGoalIds.map(String) : [],
+    createdAt: String(h?.createdAt || dbTodayISO())
   }));
 
-  // Calendar prefs
+  // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
-  out.calendar.defaultView = ["week","month","year"].includes(out.calendar.defaultView) ? out.calendar.defaultView : "week";
+  out.calendar.defaultView = ["week", "month", "year"].includes(out.calendar.defaultView) ? out.calendar.defaultView : "week";
+
   if (!out.calendar.filters || typeof out.calendar.filters !== "object") {
-    out.calendar.filters = { tasks:true, habits:true, milestones:true, goals:true };
+    out.calendar.filters = { tasks: true, habits: true, milestones: true, goals: true };
   } else {
     out.calendar.filters.tasks = out.calendar.filters.tasks !== false;
     out.calendar.filters.habits = out.calendar.filters.habits !== false;
     out.calendar.filters.milestones = out.calendar.filters.milestones !== false;
     out.calendar.filters.goals = out.calendar.filters.goals !== false;
   }
-  if (!out.calendar.focus || typeof out.calendar.focus !== "object") out.calendar.focus = { type:"all", id:"" };
-  if (!["all","goal","habit"].includes(out.calendar.focus.type)) out.calendar.focus.type = "all";
+
+  if (!out.calendar.focus || typeof out.calendar.focus !== "object") out.calendar.focus = { type: "all", id: "" };
+  if (!["all", "goal", "habit"].includes(out.calendar.focus.type)) out.calendar.focus.type = "all";
   out.calendar.focus.id = String(out.calendar.focus.id || "");
 
-  // Budget Pro
+  // Budget
   if (!out.budget || typeof out.budget !== "object") out.budget = defaultBudgetPro();
-  out.budget.currency = String(out.budget.currency || "RON");
 
   out.budget.accounts = Array.isArray(out.budget.accounts) ? out.budget.accounts : [];
   if (!out.budget.accounts.length) out.budget.accounts = defaultBudgetPro().accounts;
-
   out.budget.accounts = out.budget.accounts.map(a => ({
     id: String(a?.id || dbUid()),
     name: String(a?.name || "Account"),
@@ -202,7 +193,8 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     toAccountId: tx?.toAccountId ? String(tx.toAccountId) : "",
     categoryId: tx?.categoryId ? String(tx.categoryId) : "",
     note: String(tx?.note || ""),
-    createdAt: tx?.createdAt ? String(tx.createdAt) : dbTodayISO()
+    createdAt: tx?.createdAt ? String(tx.createdAt) : dbTodayISO(),
+    _sig: tx?._sig ? String(tx._sig) : undefined
   }));
 
   out.budget.recurringRules = Array.isArray(out.budget.recurringRules) ? out.budget.recurringRules : [];
@@ -213,7 +205,9 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     accountId: String(r?.accountId || out.budget.accounts[0]?.id || ""),
     categoryId: String(r?.categoryId || ""),
     note: String(r?.note || ""),
-    schedule: (r?.schedule && typeof r.schedule === "object") ? r.schedule : { kind: "monthly", dayOfMonth: 1, interval: 1 },
+    schedule: (r?.schedule && typeof r.schedule === "object")
+      ? r.schedule
+      : { kind: "monthly", dayOfMonth: 1, interval: 1 },
     startDate: r?.startDate ? String(r.startDate) : "",
     endDate: r?.endDate ? String(r.endDate) : "",
     lastGeneratedThrough: r?.lastGeneratedThrough ? String(r.lastGeneratedThrough) : ""
@@ -224,50 +218,44 @@ function normalizeYearModel(yearModel, yearNumFallback) {
 
 function normalizeDb(db) {
   const out = (db && typeof db === "object") ? db : dbFresh();
-
   out.version = 1;
 
   // Settings
   out.settings = out.settings && typeof out.settings === "object" ? out.settings : {};
-  out.settings.currency = "RON"; // per your decision
-  out.settings.weekStartsOn = "monday"; // per your decision
-  out.settings.currentYear = Number(out.settings.currentYear || 2026);
+  out.settings.currency = String(out.settings.currency || "RON");
+  out.settings.weekStartsOn = "monday";
+
+  // currentYear can be null
+  out.settings.currentYear =
+    (out.settings.currentYear == null || out.settings.currentYear === "")
+      ? null
+      : Number(out.settings.currentYear);
 
   // Years
   out.years = out.years && typeof out.years === "object" ? out.years : {};
   out.yearsOrder = Array.isArray(out.yearsOrder) ? out.yearsOrder.map(Number).filter(Number.isFinite) : [];
 
-  // Ensure yearsOrder matches years keys
-  const keys = Object.keys(out.years);
-  for (const k of keys) {
+  // Add keys present in years into yearsOrder
+  for (const k of Object.keys(out.years)) {
     const n = Number(k);
     if (Number.isFinite(n) && !out.yearsOrder.includes(n)) out.yearsOrder.push(n);
   }
-
-  // If empty, seed defaults
-  if (!out.yearsOrder.length) {
-    out.yearsOrder = [2026, 2027, 2028];
-    out.years["2026"] = defaultYearModel(2026);
-    out.years["2027"] = defaultYearModel(2027);
-    out.years["2028"] = defaultYearModel(2028);
-  }
-
-  out.yearsOrder.sort((a,b)=>a-b);
+  out.yearsOrder.sort((a, b) => a - b);
 
   // Normalize each year model
   for (const y of out.yearsOrder) {
     const key = String(y);
     out.years[key] = normalizeYearModel(out.years[key], y);
-    // Ensure currency matches settings for consistency
-    out.years[key].budget.currency = "RON";
   }
 
-  // Ensure currentYear exists
-  const cy = Number(out.settings.currentYear);
-  if (!out.yearsOrder.includes(cy)) {
-    out.yearsOrder.push(cy);
-    out.yearsOrder.sort((a,b)=>a-b);
-    out.years[String(cy)] = defaultYearModel(cy);
+  // If currentYear set but doesn't exist, create it
+  if (out.settings.currentYear != null) {
+    const cy = Number(out.settings.currentYear);
+    if (!out.yearsOrder.includes(cy)) {
+      out.yearsOrder.push(cy);
+      out.yearsOrder.sort((a, b) => a - b);
+      out.years[String(cy)] = defaultYearModel(cy);
+    }
   }
 
   return out;
@@ -284,7 +272,6 @@ function dbLoad() {
     }
     const parsed = JSON.parse(raw);
     const normalized = normalizeDb(parsed);
-    // Write back normalized to keep schema clean
     localStorage.setItem(DB_KEY, JSON.stringify(normalized));
     return normalized;
   } catch {
@@ -312,11 +299,9 @@ function dbEnsureYear(db, yearNum) {
 
   if (!db.yearsOrder.includes(y)) {
     db.yearsOrder.push(y);
-    db.yearsOrder.sort((a,b)=>a-b);
+    db.yearsOrder.sort((a, b) => a - b);
   }
 
-  // Keep consistent currency
-  db.years[key].budget.currency = "RON";
   return db.years[key];
 }
 
@@ -329,7 +314,6 @@ function dbAddYear(db, yearNum) {
 }
 
 function dbExport(db) {
-  // Export normalized so it can be re-imported safely
   return JSON.stringify(normalizeDb(db), null, 2);
 }
 
@@ -339,14 +323,15 @@ function dbImport(jsonText) {
   return normalized;
 }
 
-// ---------- Convenience helpers for future modules ----------
+// Convenience helpers
 function dbGetYear(db, yearNum) {
   return dbEnsureYear(db, yearNum);
 }
 
 function dbGetCurrentYearModel(db) {
-  const y = Number(db?.settings?.currentYear || 2026);
-  return dbEnsureYear(db, y);
+  const cy = db?.settings?.currentYear;
+  if (cy == null) return null;
+  return dbEnsureYear(db, Number(cy));
 }
 
 function dbSetCurrentYear(db, yearNum) {
