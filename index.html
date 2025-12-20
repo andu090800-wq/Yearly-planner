@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Plans</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="appShell">
+    <aside class="sidebar">
+      <div class="sideTop">
+        <div class="logo">
+          <div class="logoMark"></div>
+          <div>
+            <div class="logoTitle">Plans</div>
+            <div class="logoSub">Glass dashboard</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a href="#/dashboard" class="navLink">Dashboard</a>
+          <a href="#/year/2026" class="navLink">2026</a>
+          <a href="#/year/2026/habits-calendar" class="navLink">Habits</a>
+          <a href="#/year/2026/goals-dashboard" class="navLink">Goals</a>
+          <a href="#/year/2026/budget" class="navLink">Budget</a>
+          <a href="#/year/2026/plans" class="navLink">Plans</a>
+        </nav>
+      </div>
+
+      <div class="sideBottom">
+        <button id="exportBtn" class="btn secondary small">Export</button>
+        <button id="importBtn" class="btn secondary small">Import</button>
+        <input id="importFile" type="file" accept="application/json" class="hidden" />
+        <button id="wipeBtn" class="btn danger small">Wipe</button>
+        <div class="muted tiny">Local-only data (this device)</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar glass">
+        <div class="topbar-left">
+          <div class="brand">Plans</div>
+          <div id="crumb" class="crumb">Dashboard</div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- mobile quick nav -->
+          <a class="chip" href="#/dashboard">Home</a>
+          <a class="chip" href="#/year/2026">2026</a>
+          <a class="chip" href="#/year/2026/habits-yearly">Heatmap</a>
+        </div>
+      </header>
+
+      <section class="container">
+        <div id="view"></div>
+      </section>
+
+      <footer class="footer">
+        <span>Offline-ready • Black & White • Charts included</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Charts (free) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script src="app.js"></script>
+
+  <script>
+    // optional PWA
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(()=>{});
+    }
+  </script>
+</body>
+</html>
