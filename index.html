@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Plans Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#111111">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">Plans</div>
+      <div class="crumb" id="crumb"></div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn secondary" id="exportBtn">Export</button>
+      <button class="btn secondary" id="importBtn">Import</button>
+      <input id="importFile" type="file" accept="application/json" class="hidden">
+      <button class="btn danger" id="wipeBtn">Wipe</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="view"></div>
+  </main>
+
+  <footer class="footer muted">
+    Offline PWA • data stored locally on this device
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+  </script>
+</body>
+</html>
