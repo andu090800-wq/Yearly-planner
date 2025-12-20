@@ -2,8 +2,8 @@
    - Local-only storage (localStorage)
    - No preset years: user creates years manually from Dashboard
    - Global settings: currency (RON/EUR/USD), weekStartsOn Monday
-   - Prepared for Goals, Habits (binary), Calendar, Budget Pro
-   - Includes safe normalization/migrations
+   - Supports Goals, Habits (binary), Calendar, Budget Pro
+   - Safe normalization/migrations
 */
 
 const DB_KEY = "plans_app_db_v1";
@@ -33,18 +33,15 @@ function defaultCategoriesPerYear() {
 
 function defaultBudgetPro() {
   return {
-    // Accounts
     accounts: [
       { id: dbUid(), name: "Bank", type: "bank" },
       { id: dbUid(), name: "Cash", type: "cash" },
       { id: dbUid(), name: "Savings", type: "savings" }
     ],
-
-    // Transactions (Pro):
-    // { id, type:"income"|"expense"|"transfer", amount, date, accountId, toAccountId?, categoryId?, note?, createdAt }
+    // transactions:
+    // { id, type:"income"|"expense"|"transfer", amount, date, accountId, toAccountId?, categoryId?, note?, createdAt, _sig? }
     transactions: [],
-
-    // Recurring rules:
+    // recurringRules:
     // { id, type:"income"|"expense", amount, accountId, categoryId, note?, schedule, startDate?, endDate?, lastGeneratedThrough? }
     recurringRules: []
   };
@@ -53,28 +50,14 @@ function defaultBudgetPro() {
 function defaultYearModel(yearNum) {
   return {
     year: Number(yearNum),
-
     categories: defaultCategoriesPerYear(),
-
-    // Goals:
-    // { id, title, categoryId, startDate?, endDate?, targetValue?, currentValue?, unit?, notes?,
-    //   milestones:[{id,title,dueDate?,tasks:[{id,title,dueDate?,done}]}],
-    //   linkedHabitIds:[]
-    // }
     goals: [],
-
-    // Habits (binary):
-    // { id, title, categoryId, notes?, recurrenceRule, checks:{[isoDate]:true}, linkedGoalIds:[], createdAt }
     habits: [],
-
-    // Calendar preferences
     calendar: {
-      defaultView: "week", // "week" | "month" | "year"
+      defaultView: "week",
       filters: { tasks: true, habits: true, milestones: true, goals: true },
-      focus: { type: "all", id: "" } // {type:"all"|"goal"|"habit", id}
+      focus: { type: "all", id: "" }
     },
-
-    // Budget Pro
     budget: defaultBudgetPro()
   };
 }
@@ -83,9 +66,9 @@ function dbFresh() {
   return {
     version: 1,
     settings: {
-      currency: "RON",        // user can change to EUR/USD
-      weekStartsOn: "monday", // fixed per your preference
-      currentYear: null       // becomes number when first year created
+      currency: "RON",
+      weekStartsOn: "monday",
+      currentYear: null
     },
     yearsOrder: [],
     years: {}
@@ -158,7 +141,6 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
   out.calendar.defaultView = ["week", "month", "year"].includes(out.calendar.defaultView) ? out.calendar.defaultView : "week";
-
   if (!out.calendar.filters || typeof out.calendar.filters !== "object") {
     out.calendar.filters = { tasks: true, habits: true, milestones: true, goals: true };
   } else {
@@ -167,7 +149,6 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     out.calendar.filters.milestones = out.calendar.filters.milestones !== false;
     out.calendar.filters.goals = out.calendar.filters.goals !== false;
   }
-
   if (!out.calendar.focus || typeof out.calendar.focus !== "object") out.calendar.focus = { type: "all", id: "" };
   if (!["all", "goal", "habit"].includes(out.calendar.focus.type)) out.calendar.focus.type = "all";
   out.calendar.focus.id = String(out.calendar.focus.id || "");
@@ -224,8 +205,6 @@ function normalizeDb(db) {
   out.settings = out.settings && typeof out.settings === "object" ? out.settings : {};
   out.settings.currency = String(out.settings.currency || "RON");
   out.settings.weekStartsOn = "monday";
-
-  // currentYear can be null
   out.settings.currentYear =
     (out.settings.currentYear == null || out.settings.currentYear === "")
       ? null
@@ -244,8 +223,7 @@ function normalizeDb(db) {
 
   // Normalize each year model
   for (const y of out.yearsOrder) {
-    const key = String(y);
-    out.years[key] = normalizeYearModel(out.years[key], y);
+    out.years[String(y)] = normalizeYearModel(out.years[String(y)], y);
   }
 
   // If currentYear set but doesn't exist, create it
@@ -313,6 +291,29 @@ function dbAddYear(db, yearNum) {
   dbSave(db);
 }
 
+/** Deletes a year AND all its data (goals/habits/budget/calendar settings). */
+function dbDeleteYear(db, yearNum) {
+  const y = Number(yearNum);
+  if (!Number.isFinite(y)) throw new Error("Invalid year");
+
+  const key = String(y);
+  if (!db.years || !db.years[key]) throw new Error("Year not found");
+
+  // Remove year model completely
+  delete db.years[key];
+
+  // Remove from years order
+  db.yearsOrder = Array.isArray(db.yearsOrder) ? db.yearsOrder : [];
+  db.yearsOrder = db.yearsOrder.filter(n => Number(n) !== y);
+
+  // Fix current year
+  if (db.settings?.currentYear === y) {
+    db.settings.currentYear = db.yearsOrder.length ? db.yearsOrder[0] : null;
+  }
+
+  dbSave(db);
+}
+
 function dbExport(db) {
   return JSON.stringify(normalizeDb(db), null, 2);
 }
@@ -323,7 +324,6 @@ function dbImport(jsonText) {
   return normalized;
 }
 
-// Convenience helpers
 function dbGetYear(db, yearNum) {
   return dbEnsureYear(db, yearNum);
 }
