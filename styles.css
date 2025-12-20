@@ -247,3 +247,67 @@ textarea:focus{
   outline:none;
   box-shadow: 0 0 0 3px rgba(0,0,0,.10);
 }
+/* Calendar essentials */
+.calDay { padding:14px; }
+.calDay.today { border-color: rgba(0,0,0,.18); }
+.calDayHead{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.calDayTitle{ font-size:16px; font-weight:800; }
+.calList{ display:flex; flex-direction:column; gap:8px; }
+
+.calItem{ display:flex; }
+.calHabit{ display:flex; align-items:center; gap:10px; }
+
+.calChip{
+  width:100%;
+  text-align:left;
+  border:1px solid rgba(0,0,0,.10);
+  background:#fff;
+  border-radius:14px;
+  padding:10px 12px;
+  font:inherit;
+}
+.calChip.overdue{ border-color: rgba(176,0,32,.35); }
+
+.calMonthHead{ display:flex; justify-content:space-between; align-items:baseline; }
+.calMonthTitle{ font-size:18px; font-weight:900; }
+
+.calGrid{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap:8px;
+  margin-top:10px;
+}
+.calGridHead{ margin-top:14px; }
+.calDow{ font-size:12px; color:var(--muted); text-align:center; padding:4px 0; }
+
+.calCell{
+  border:1px solid rgba(0,0,0,.08);
+  background:#fff;
+  border-radius:14px;
+  padding:10px;
+  min-height:56px;
+  text-align:left;
+}
+.calCell.dim{ opacity:.45; }
+.calCell.today{ border-color: rgba(0,0,0,.20); }
+.calCellTop{ display:flex; justify-content:space-between; align-items:center; }
+.calCellNum{ font-weight:800; }
+.calBadge{
+  font-size:11px;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.04);
+}
+.calBadge.bad{ border-color: rgba(176,0,32,.35); }
+
+.calMonthsGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+@media (min-width: 980px){
+  .calMonthsGrid{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.calMonthCard{ text-align:left; padding:14px; }
+.calMonthCardTitle{ font-weight:900; font-size:14px; }
