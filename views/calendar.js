@@ -649,32 +649,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ✅ FIX: openDaily numai DB + hashchange (NU rerender direct)
   function openDaily(iso) {
-  const d = iso || today;
-
-  // salvează preferința (ca să rămână pe "day" dacă reîncarcă)
-  savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
-
-  // FORȚEAZĂ randarea imediat în UI (nu depinde de router/hashchange)
-  const el = document.getElementById("calBody");
-  if (!el) return;
-
-  // update labels + highlight
-  const viewLbl = document.getElementById("viewLbl");
-  const focusLbl = document.getElementById("focusLbl");
-  if (viewLbl) viewLbl.textContent = "day";
-  if (focusLbl) focusLbl.textContent = d;
-  paintSeg("day");
-
-  el.innerHTML = renderDay(d);
-
-  // re-atașează handler-ele din Daily
-  el.querySelectorAll("input[type='checkbox'][data-habit]").forEach((cb) => {
-    cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
-  });
-  el.querySelectorAll("[data-nav]").forEach((btn) => {
-    btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
-  });
-}
+    const d = iso || today;
+    setView("day", d, d);
+  }
 
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
@@ -864,29 +841,13 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- View buttons ----------
-  // ✅ Event delegation (prinde click-ul chiar dacă UI-ul se reface)
-App.viewEl.addEventListener("click", (e) => {
-  const t = e.target.closest("#vDay, #vWeek, #vMonth, #vYear, [data-wday], [data-mday]");
-  if (!t) return;
+  const vDay = document.getElementById("vDay");
+  const vWeek = document.getElementById("vWeek");
+  const vMonth = document.getElementById("vMonth");
+  const vYear = document.getElementById("vYear");
 
-  // Day button
-  if (t.id === "vDay") {
-    e.preventDefault(); e.stopPropagation();
-    return openDaily(today);
-  }
-
-  // Week/Month/Year buttons (lăsăm rerender ca înainte)
-  if (t.id === "vWeek") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week"); }
-  if (t.id === "vMonth") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month"); }
-  if (t.id === "vYear") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year"); }
-
-  // Tap pe zi în Week/Month => Daily
-  const w = t.getAttribute("data-wday");
-  if (w) { e.preventDefault(); e.stopPropagation(); return openDaily(w); }
-
-  const m = t.getAttribute("data-mday");
-  if (m) { e.preventDefault(); e.stopPropagation(); return openDaily(m); }
-}, true);
+  // ✅ FIX: toate butoanele trec prin DB + hashchange (flux consistent)
+  if (vDay) vDay.onclick = (e) => { e.preventDefault(); openDaily(today); };
   if (vWeek) vWeek.onclick = (e) => { e.preventDefault(); setView("week", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
   if (vMonth) vMonth.onclick = (e) => { e.preventDefault(); setView("month", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
   if (vYear) vYear.onclick = (e) => { e.preventDefault(); setView("year", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
