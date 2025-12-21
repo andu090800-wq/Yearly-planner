@@ -861,8 +861,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const vYear = document.getElementById("vYear");
 
   // ✅ Daily button always goes to TODAY automatically
-  if (vDay) vDay.onclick = () => openDaily(today);
-
+  if (vDay) vDay.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openDaily(today); };
   if (vWeek) vWeek.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week");
   if (vMonth) vMonth.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month");
   if (vYear) vYear.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year");
