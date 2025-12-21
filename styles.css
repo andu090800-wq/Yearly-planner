@@ -1058,3 +1058,211 @@ textarea:focus{
 .yMeta{ margin-top:6px; display:flex; flex-direction:column; gap:3px; }
 .yCount{ font-size:12px; color: var(--muted); font-weight:800; }
 .yOverdue{ font-size:12px; font-weight:900; color:#b00020; }
+
+/* =========================
+   Calendar one-shot styles (Week/Month/Year mini)
+   ========================= */
+
+/* Month grid */
+.calGrid{
+  display:grid !important;
+  grid-template-columns: repeat(7, minmax(0,1fr)) !important;
+  gap:10px !important;
+}
+.calGridHead{ margin-top:8px; margin-bottom:8px; }
+.calDow{
+  text-align:center;
+  font-size:11px;
+  color: var(--muted);
+  font-weight:900;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+}
+.calMonthHead{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.calMonthTitle{ font-weight:900; font-size:16px; text-transform: capitalize; }
+
+.calCell{
+  border:0 !important;
+  background: transparent !important;
+  box-shadow:none !important;
+  padding:6px 2px !important;
+  border-radius:18px;
+  min-height:58px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  cursor:pointer;
+}
+.calCell.dim{ opacity:.38; }
+.calCellTop{ width:100%; display:flex; justify-content:center; }
+.calCellNum{
+  width:34px; height:34px; border-radius:999px;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:13px; line-height:1;
+}
+.calCell.sel .calCellNum{ background:#111; color:#fff; }
+.calCell.today .calCellNum{ box-shadow: inset 0 0 0 2px rgba(0,0,0,.20); }
+.calCell.today.sel .calCellNum{ box-shadow:none; }
+.calCell.bad .calCellNum{ box-shadow: inset 0 0 0 2px rgba(176,0,32,.22); }
+.calCell.bad.sel .calCellNum{ box-shadow:none; }
+
+.calDots{ margin-top:6px; display:flex; gap:4px; align-items:center; height:10px; }
+.calDot{ width:6px; height:6px; border-radius:999px; background: rgba(0,0,0,.55); }
+.calDot.ghost{ background: rgba(0,0,0,.10); }
+
+/* Week strip bigger + agenda */
+.wkHead{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.wkStrip{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:12px; }
+
+.wkDay{ border:0; background:transparent; padding:10px 4px; border-radius:20px; text-align:center; }
+.wkDow{ font-size:12px; color:var(--muted); font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+
+.wkNum{
+  width:44px; height:44px; border-radius:999px;
+  margin:8px auto 0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:16px; line-height:1;
+}
+.wkDay.sel .wkNum{ background:#111; color:#fff; }
+.wkDay.today .wkNum{ box-shadow: inset 0 0 0 2px rgba(0,0,0,.20); }
+.wkDay.today.sel .wkNum{ box-shadow:none; }
+.wkDay.bad .wkNum{ box-shadow: inset 0 0 0 2px rgba(176,0,32,.22); }
+.wkDay.bad.sel .wkNum{ box-shadow:none; }
+
+.wkDot{ width:7px; height:7px; border-radius:999px; margin:8px auto 0; background: rgba(0,0,0,.55); }
+.wkDot.ghost{ background: rgba(0,0,0,.12); }
+.wkDay.sel .wkDot{ background:#fff; }
+.wkDay.sel .wkDot.ghost{ background: rgba(255,255,255,.35); }
+
+@media (max-width: 380px){
+  .wkNum{ width:40px; height:40px; }
+}
+
+.agWrap{ display:flex; flex-direction:column; gap:10px; }
+.agHead{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.agList{ display:flex; flex-direction:column; gap:10px; }
+
+.agRow{
+  border:1px solid var(--border);
+  border-radius:18px;
+  background: rgba(255,255,255,.92);
+  box-shadow: var(--shadow2);
+  padding:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  text-align:left;
+}
+.agBtn{ width:100%; cursor:pointer; }
+.agRow.bad{ box-shadow: 0 0 0 3px rgba(176,0,32,.10); }
+
+.agText{ display:flex; flex-direction:column; gap:2px; }
+.agTitle{ font-weight:900; }
+.agSub{ font-size:12px; color:var(--muted); font-weight:800; }
+
+.agTag{
+  font-size:11px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.85);
+  font-weight:900;
+  text-transform: lowercase;
+}
+.agTag.bad{ border-color: rgba(176,0,32,.35); }
+.agHabit{ display:flex; align-items:center; gap:10px; width:100%; }
+
+/* ===== Year mini calendars ===== */
+.yMiniWrap{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:12px;
+}
+@media (min-width: 980px){
+  .yMiniWrap{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+
+.yMiniCard{
+  border:1px solid var(--border);
+  border-radius:18px;
+  background: rgba(255,255,255,.92);
+  box-shadow: var(--shadow2);
+  padding:12px;
+}
+
+.yMiniTitle{
+  width:100%;
+  text-align:left;
+  border:0;
+  background:transparent;
+  font:inherit;
+  font-weight:900;
+  text-transform: capitalize;
+  padding:0 0 8px 0;
+  cursor:pointer;
+}
+
+.yMiniDow{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:6px;
+  margin-bottom:6px;
+  font-size:10px;
+  color: var(--muted);
+  font-weight:900;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+  text-align:center;
+}
+
+.yMiniGrid{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:6px;
+}
+
+.yMiniCell{
+  position:relative;
+  border:0;
+  background:transparent;
+  padding:0;
+  height:26px;
+  border-radius:10px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.yMiniCell.dim{ opacity:.28; }
+
+.yMiniNum{
+  width:22px; height:22px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  font-size:11px;
+  line-height:1;
+}
+
+.yMiniCell.sel .yMiniNum{ background:#111; color:#fff; }
+
+.yMiniCell.today .yMiniNum{ box-shadow: inset 0 0 0 2px rgba(0,0,0,.20); }
+.yMiniCell.today.sel .yMiniNum{ box-shadow:none; }
+
+.yMiniCell.bad .yMiniNum{ box-shadow: inset 0 0 0 2px rgba(176,0,32,.22); }
+.yMiniCell.bad.sel .yMiniNum{ box-shadow:none; }
+
+.yMiniDot{
+  position:absolute;
+  bottom:3px;
+  width:5px;
+  height:5px;
+  border-radius:999px;
+  background: rgba(0,0,0,.55);
+}
+.yMiniCell.sel .yMiniDot{ background:#fff; }
