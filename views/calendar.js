@@ -10,17 +10,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const yr = App.getYearModel(db);
   const today = dbTodayISO();
 
-  // Top-right button (+ Add) stays
-  setPrimary("+ Add", () => {
-    const choice = prompt("Add: goal / habit / budget ?", "goal");
-    if (!choice) return;
-    const c = choice.toLowerCase().trim();
-    if (c.startsWith("g")) return App.navTo("#/goals");
-    if (c.startsWith("h")) return App.navTo("#/habits");
-    if (c.startsWith("b")) return App.navTo("#/budget");
-    App.navTo("#/goals");
-  });
+  // ✅ Hide header primary action (+ Add) completely
+  try { setPrimary("", () => {}); } catch {}
 
+  // Breadcrumb
   App.setCrumb(`Calendar • ${year}`);
 
   // ---------- Date helpers ----------
@@ -48,13 +41,21 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     d.setDate(d.getDate() + diff);
     return toISO(d);
   };
-  const fmtMonthRO = (iso) => fromISO(startOfMonth(iso)).toLocaleString("ro-RO", { month: "long", year: "numeric" });
-  const fmtDowRO = (iso) => fromISO(iso).toLocaleString("ro-RO", { weekday: "long" });
-  const fmtPrettyRO = (iso) => fromISO(iso).toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  const fmtMonthRO = (iso) =>
+    fromISO(startOfMonth(iso)).toLocaleString("ro-RO", { month: "long", year: "numeric" });
+
+  const fmtPrettyRO = (iso) =>
+    fromISO(iso).toLocaleDateString("ro-RO", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
 
   // ---------- Calendar prefs (per year) ----------
   yr.calendar = yr.calendar || {
-    defaultView: "month", // month default
+    defaultView: "month",
     filters: { tasks: true, habits: true, milestones: true, goals: true },
     focus: { type: "all", id: "" },
     focusDate: today,
@@ -65,8 +66,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   yr.calendar.focusDate = yr.calendar.focusDate || today;
   yr.calendar.selectedDate = yr.calendar.selectedDate || today;
 
-  // allow: day/week/month/year
-  if (!["day", "week", "month", "year"].includes(yr.calendar.defaultView)) yr.calendar.defaultView = "month";
+  if (!["day", "week", "month", "year"].includes(yr.calendar.defaultView)) {
+    yr.calendar.defaultView = "month";
+  }
 
   const view = yr.calendar.defaultView;
   const focusDate = yr.calendar.focusDate;
@@ -81,7 +83,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ---------- Habit due + toggle ----------
   function habitDueOn(h, iso) {
-    try { if (window.Habits?.habitDueOn) return !!window.Habits.habitDueOn(h, iso); } catch {}
+    try {
+      if (window.Habits?.habitDueOn) return !!window.Habits.habitDueOn(h, iso);
+    } catch {}
     const r = h.recurrenceRule || { kind: "weekdays" };
     const day = fromISO(iso).getDay(); // 0..6
     if (r.kind === "daily") return true;
@@ -93,9 +97,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function toggleHabitCheck(habitId, iso) {
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
-    const h = (yr2.habits || []).find(x => x.id === habitId);
+    const h = (yr2.habits || []).find((x) => x.id === habitId);
     if (!h) return;
-    h.checks = (h.checks && typeof h.checks === "object") ? h.checks : {};
+    h.checks = h.checks && typeof h.checks === "object" ? h.checks : {};
     if (h.checks[iso]) delete h.checks[iso];
     else h.checks[iso] = true;
     dbSave(db2);
@@ -115,11 +119,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const yrNow = App.getYearModel(dbNow);
     if (f.type === "all") return "All";
     if (f.type === "goal") {
-      const g = (yrNow.goals || []).find(x => x.id === f.id);
+      const g = (yrNow.goals || []).find((x) => x.id === f.id);
       return g ? `Goal: ${g.title}` : "Goal";
     }
     if (f.type === "habit") {
-      const h = (yrNow.habits || []).find(x => x.id === f.id);
+      const h = (yrNow.habits || []).find((x) => x.id === f.id);
       return h ? `Habit: ${h.title}` : "Habit";
     }
     return "All";
@@ -153,7 +157,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
     // goals deadlines
     if (filters.goals) {
-      for (const g of (yrNow.goals || [])) {
+      for (const g of yrNow.goals || []) {
         if (!passesFocusForGoal(g.id, dbNow)) continue;
 
         if ((g.endDate || "").trim() && g.endDate === iso) {
@@ -166,7 +170,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }
 
     // milestones & tasks
-    for (const g of (yrNow.goals || [])) {
+    for (const g of yrNow.goals || []) {
       if (!passesFocusForGoal(g.id, dbNow)) continue;
       const ms = Array.isArray(g.milestones) ? g.milestones : [];
 
@@ -186,7 +190,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
               items.push({
                 kind: "task",
                 title: `${t.done ? "✅ " : ""}Task: ${t.title} (${g.title})`,
-                overdue: (!t.done && t.dueDate < today),
+                overdue: !t.done && t.dueDate < today,
                 nav: `#/goal/${g.id}`
               });
             }
@@ -200,7 +204,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
     // habits due
     if (filters.habits) {
-      for (const h of (yrNow.habits || [])) {
+      for (const h of yrNow.habits || []) {
         if (!passesFocusForHabit(h, dbNow)) continue;
         if (!habitDueOn(h, iso)) continue;
         items.push({ kind: "habit", title: h.title, overdue: false, habitId: h.id, done: !!h.checks?.[iso] });
@@ -219,41 +223,56 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   // ---------- Swipe ----------
   function attachSwipe(el, getView, getISO, onMove) {
     if (!el) return;
-    let sx = 0, sy = 0, tracking = false;
-
-    el.addEventListener("touchstart", (e) => {
-      const t = e.touches?.[0];
-      if (!t) return;
-      sx = t.clientX; sy = t.clientY;
-      tracking = true;
-    }, { passive: true });
-
-    el.addEventListener("touchmove", (e) => {
-      if (!tracking) return;
-      const t = e.touches?.[0];
-      if (!t) return;
-      const dx = t.clientX - sx;
-      const dy = t.clientY - sy;
-      if (Math.abs(dy) > Math.abs(dx)) return; // allow vertical scroll
-      e.preventDefault();
-    }, { passive: false });
-
-    el.addEventListener("touchend", (e) => {
-      if (!tracking) return;
+    let sx = 0,
+      sy = 0,
       tracking = false;
 
-      const t = e.changedTouches?.[0];
-      if (!t) return;
+    el.addEventListener(
+      "touchstart",
+      (e) => {
+        const t = e.touches?.[0];
+        if (!t) return;
+        sx = t.clientX;
+        sy = t.clientY;
+        tracking = true;
+      },
+      { passive: true }
+    );
 
-      const dx = t.clientX - sx;
-      const dy = t.clientY - sy;
+    el.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!tracking) return;
+        const t = e.touches?.[0];
+        if (!t) return;
+        const dx = t.clientX - sx;
+        const dy = t.clientY - sy;
+        if (Math.abs(dy) > Math.abs(dx)) return; // allow vertical scroll
+        e.preventDefault();
+      },
+      { passive: false }
+    );
 
-      if (Math.abs(dx) < 60) return;
-      if (Math.abs(dy) > 70) return;
+    el.addEventListener(
+      "touchend",
+      (e) => {
+        if (!tracking) return;
+        tracking = false;
 
-      const dir = dx < 0 ? "next" : "prev";
-      onMove(dir, getView(), getISO());
-    }, { passive: true });
+        const t = e.changedTouches?.[0];
+        if (!t) return;
+
+        const dx = t.clientX - sx;
+        const dy = t.clientY - sy;
+
+        if (Math.abs(dx) < 60) return;
+        if (Math.abs(dy) > 70) return;
+
+        const dir = dx < 0 ? "next" : "prev";
+        onMove(dir, getView(), getISO());
+      },
+      { passive: true }
+    );
   }
 
   // ---------- Nav (swipe only) ----------
@@ -287,28 +306,32 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function renderDay(iso) {
     const its = itemsForDay(iso);
 
-    const list = its.length ? its.map(it => {
-      if (it.kind === "habit") {
-        return `
-          <div class="agRow">
-            <label class="agHabit">
-              <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(iso)}" />
-              <span class="agTitle">${App.esc(it.title)}</span>
-            </label>
-            <span class="agTag">habit</span>
-          </div>
-        `;
-      }
-      return `
-        <button class="agRow agBtn ${it.overdue ? "bad" : ""}" data-nav="${App.esc(it.nav)}">
-          <div class="agText">
-            <div class="agTitle">${App.esc(it.title)}</div>
-            <div class="agSub">${App.esc(it.kind)}</div>
-          </div>
-          <span class="agTag ${it.overdue ? "bad" : ""}">${App.esc(it.kind)}</span>
-        </button>
-      `;
-    }).join("") : `<div class="muted">No items.</div>`;
+    const list = its.length
+      ? its
+          .map((it) => {
+            if (it.kind === "habit") {
+              return `
+                <div class="agRow">
+                  <label class="agHabit">
+                    <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(iso)}" />
+                    <span class="agTitle">${App.esc(it.title)}</span>
+                  </label>
+                  <span class="agTag">habit</span>
+                </div>
+              `;
+            }
+            return `
+              <button class="agRow agBtn ${it.overdue ? "bad" : ""}" data-nav="${App.esc(it.nav)}">
+                <div class="agText">
+                  <div class="agTitle">${App.esc(it.title)}</div>
+                  <div class="agSub">${App.esc(it.kind)}</div>
+                </div>
+                <span class="agTag ${it.overdue ? "bad" : ""}">${App.esc(it.kind)}</span>
+              </button>
+            `;
+          })
+          .join("")
+      : `<div class="muted">No items.</div>`;
 
     return `
       <div class="card big stack" style="gap:12px">
@@ -327,38 +350,50 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function renderWeek(anchorISO) {
     const start = startOfWeekMonday(anchorISO);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-    const sel = (yr.calendar.selectedDate || today);
-    const dow = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    const sel = yr.calendar.selectedDate || today;
+    const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-    const strip = days.map(d => {
-      const its = itemsForDay(d);
-      const hasAny = its.length > 0;
-      const isToday = d === today;
-      const isSel = d === sel;
-      const hasOverdue = its.some(x => x.overdue);
-      const idx = (fromISO(d).getDay() + 6) % 7;
+    const strip = days
+      .map((d) => {
+        const its = itemsForDay(d);
+        const hasAny = its.length > 0;
+        const isToday = d === today;
+        const isSel = d === sel;
+        const hasOverdue = its.some((x) => x.overdue);
+        const idx = (fromISO(d).getDay() + 6) % 7;
 
-      return `
-        <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
-          <div class="wkDow">${dow[idx]}</div>
-          <div class="wkNum">${App.esc(String(Number(d.slice(8,10))))}</div>
-          <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
-        </button>
-      `;
-    }).join("");
+        return `
+          <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
+            <div class="wkDow">${dow[idx]}</div>
+            <div class="wkNum">${App.esc(String(Number(d.slice(8, 10))))}</div>
+            <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
+          </button>
+        `;
+      })
+      .join("");
 
-    // show a tiny hint + selected date
+    // show mini agenda preview (optional, feels more iPhone)
+    const preview = itemsForDay(sel)
+      .slice(0, 6)
+      .map((it) => {
+        if (it.kind === "habit") {
+          return `<div class="muted">• Habit: ${App.esc(it.title)}</div>`;
+        }
+        return `<div class="muted">• ${App.esc(it.title)}</div>`;
+      })
+      .join("");
+
     return `
       <div class="card big stack" style="gap:12px">
         <div class="wkHead">
           <div class="title2">Week</div>
-          <span class="pill">${App.esc(start)} → ${App.esc(addDays(start,6))}</span>
+          <span class="pill">${App.esc(start)} → ${App.esc(addDays(start, 6))}</span>
         </div>
 
         <div class="wkStrip">${strip}</div>
 
-        <div class="muted">Tip: Tap a day to open Daily.</div>
-        <div class="pill">Selected <b>${App.esc(sel)}</b></div>
+        <div class="pill">Tap any day → <b>Daily</b></div>
+        ${preview ? `<div class="cardTap" style="padding:12px;border-radius:18px;border:1px solid var(--border);">${preview}</div>` : ``}
       </div>
     `;
   }
@@ -376,34 +411,41 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       </div>
     `;
 
-    const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<div class="calDow">${x}</div>`).join("");
-    const selected = (yr.calendar.selectedDate || today);
+    const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      .map((x) => `<div class="calDow">${x}</div>`)
+      .join("");
 
-    const cellHtml = cells.map(d => {
-      const inMonth = monthKey(d) === monthKey(anchorISO);
-      const its = itemsForDay(d);
+    const selected = yr.calendar.selectedDate || today;
 
-      const hasOverdue = its.some(x => x.overdue);
-      const isToday = d === today;
-      const isSel = d === selected;
+    const cellHtml = cells
+      .map((d) => {
+        const inMonth = monthKey(d) === monthKey(anchorISO);
+        const its = itemsForDay(d);
 
-      const hasTasks = its.some(x => x.kind === "task" || x.kind === "milestone");
-      const hasHabits = its.some(x => x.kind === "habit");
-      const hasGoals = its.some(x => x.kind === "goal");
+        const hasOverdue = its.some((x) => x.overdue);
+        const isToday = d === today;
+        const isSel = d === selected;
 
-      return `
-        <button class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}" data-mday="${App.esc(d)}">
-          <div class="calCellTop">
-            <span class="calCellNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
-          </div>
-          <div class="calDots">
-            ${hasTasks ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-            ${hasHabits ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-            ${hasGoals ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-          </div>
-        </button>
-      `;
-    }).join("");
+        const hasTasks = its.some((x) => x.kind === "task" || x.kind === "milestone");
+        const hasHabits = its.some((x) => x.kind === "habit");
+        const hasGoals = its.some((x) => x.kind === "goal");
+
+        return `
+          <button class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${
+          hasOverdue ? "bad" : ""
+        }" data-mday="${App.esc(d)}">
+            <div class="calCellTop">
+              <span class="calCellNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
+            </div>
+            <div class="calDots">
+              ${hasTasks ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+              ${hasHabits ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+              ${hasGoals ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+            </div>
+          </button>
+        `;
+      })
+      .join("");
 
     return `
       <div class="card big stack">
@@ -415,56 +457,60 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- Render: YEAR with MINI CALENDARS ----------
-  // IMPORTANT CHANGE: tap ANY day cell => MONTH view (not week)
+  // ✅ tap ANY mini cell => MONTH view
   function renderYear(anchorISO) {
     const Y = Number(String(anchorISO).slice(0, 4));
-    const selected = (yr.calendar.selectedDate || today);
+    const selected = yr.calendar.selectedDate || today;
     const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`);
 
-    const monthCards = months.map(m0 => {
-      const monthStart = startOfMonth(m0);
-      const gridStart = startOfWeekMonday(monthStart);
-      const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+    const monthCards = months
+      .map((m0) => {
+        const monthStart = startOfMonth(m0);
+        const gridStart = startOfWeekMonday(monthStart);
+        const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
-      const monthName = fromISO(monthStart).toLocaleString("ro-RO", { month: "long" });
-      const monthLabel = `${monthName} ${Y}`;
+        const monthName = fromISO(monthStart).toLocaleString("ro-RO", { month: "long" });
+        const monthLabel = `${monthName} ${Y}`;
 
-      const miniCells = cells.map(d => {
-        const inMonth = monthKey(d) === monthKey(m0);
-        const its = itemsForDay(d);
-        const hasAny = its.length > 0;
-        const hasOverdue = its.some(x => x.overdue);
-        const isToday = d === today;
-        const isSel = d === selected;
+        const miniCells = cells
+          .map((d) => {
+            const inMonth = monthKey(d) === monthKey(m0);
+            const its = itemsForDay(d);
+            const hasAny = its.length > 0;
+            const hasOverdue = its.some((x) => x.overdue);
+            const isToday = d === today;
+            const isSel = d === selected;
 
-        // data-yday now goes to MONTH view
+            return `
+              <button class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${
+              hasOverdue ? "bad" : ""
+            }" data-yday="${App.esc(d)}" data-month="${App.esc(m0)}">
+                <span class="yMiniNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
+                ${hasAny ? `<span class="yMiniDot"></span>` : ``}
+              </button>
+            `;
+          })
+          .join("");
+
         return `
-          <button class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}"
-                  data-yday="${App.esc(d)}">
-            <span class="yMiniNum">${App.esc(String(Number(d.slice(8,10))))}</span>
-            ${hasAny ? `<span class="yMiniDot"></span>` : ``}
-          </button>
+          <div class="yMiniCard">
+            <button class="yMiniTitle" data-monthtitle="${App.esc(m0)}">${App.esc(monthLabel)}</button>
+            <div class="yMiniDow">
+              <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+            </div>
+            <div class="yMiniGrid">
+              ${miniCells}
+            </div>
+          </div>
         `;
-      }).join("");
-
-      return `
-        <div class="yMiniCard">
-          <button class="yMiniTitle" data-month="${App.esc(m0)}">${App.esc(monthLabel)}</button>
-          <div class="yMiniDow">
-            <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-          </div>
-          <div class="yMiniGrid">
-            ${miniCells}
-          </div>
-        </div>
-      `;
-    }).join("");
+      })
+      .join("");
 
     return `
       <div class="card big stack" style="gap:12px">
         <div>
           <div class="title2">Year ${App.esc(String(Y))}</div>
-          <div class="muted">Swipe left/right • Tap a month title → Month • Tap any day → Month</div>
+          <div class="muted">Swipe left/right • Tap any day → Month</div>
         </div>
         <div class="yMiniWrap">
           ${monthCards}
@@ -475,26 +521,24 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ---------- UI ----------
   const filters = yr.calendar.filters;
-  const goalOptions = (yr.goals || []).map(g => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
-  const habitOptions = (yr.habits || []).map(h => `<option value="${App.esc(h.id)}">${App.esc(h.title)}</option>`).join("");
+  const goalOptions = (yr.goals || []).map((g) => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
+  const habitOptions = (yr.habits || []).map((h) => `<option value="${App.esc(h.id)}">${App.esc(h.title)}</option>`).join("");
 
-  // No Prev/Today/Next here (swipe only)
   App.viewEl.innerHTML = `
     <div class="stack">
       <div class="card big">
         <div class="stack" style="gap:12px">
           <div>
-            <div class="title2">Calendar</div>
-            <div class="muted">${App.esc(String(year))}</div>
+            <div class="title2">Calendar • ${App.esc(String(year))}</div>
+            <div class="muted">Swipe left/right to navigate</div>
           </div>
 
-          <!-- Compact view toolbar -->
           <div class="row" style="justify-content:space-between; gap:10px;">
             <div class="seg">
-              <button class="segBtn" id="vWeek">Week</button>
-              <button class="segBtn" id="vMonth">Month</button>
-              <button class="segBtn" id="vYear">Year</button>
               <button class="segBtn" id="vDay">Daily</button>
+              <button class="segBtn" id="vWeek">Weekly</button>
+              <button class="segBtn" id="vMonth">Monthly</button>
+              <button class="segBtn" id="vYear">Yearly</button>
             </div>
             <span class="pill">Focus <b id="focusLbl">${App.esc(focusDate)}</b> • <span id="viewLbl">${App.esc(view)}</span></span>
           </div>
@@ -558,16 +602,14 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     </div>
   `;
 
-  // highlight active view button (segmented)
+  // segmented highlight
   function paintSeg(v) {
-    const map = { week: "vWeek", month: "vMonth", year: "vYear", day: "vDay" };
-    Object.values(map).forEach(id => {
+    const map = { day: "vDay", week: "vWeek", month: "vMonth", year: "vYear" };
+    ["vDay", "vWeek", "vMonth", "vYear"].forEach((id) => {
       const el = document.getElementById(id);
-      if (!el) return;
-      el.classList.remove("on");
+      if (el) el.classList.remove("on");
     });
-    const btnId = map[v] || "vMonth";
-    const btn = document.getElementById(btnId);
+    const btn = document.getElementById(map[v] || "vMonth");
     if (btn) btn.classList.add("on");
   }
 
@@ -580,17 +622,13 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const iso = bodyISO || (yrNow.calendar?.focusDate || today);
     const selected = yrNow.calendar?.selectedDate || today;
 
-    savePrefs({
-      defaultView: v,
-      focusDate: iso,
-      selectedDate: selected
-    });
+    savePrefs({ defaultView: v, focusDate: iso, selectedDate: selected });
 
     const dbNow2 = dbLoad();
     const yrNow2 = App.getYearModel(dbNow2);
 
-    const vNow = (yrNow2.calendar?.defaultView || "month");
-    const isoNow = (yrNow2.calendar?.focusDate || today);
+    const vNow = yrNow2.calendar?.defaultView || "month";
+    const isoNow = yrNow2.calendar?.focusDate || today;
 
     document.getElementById("viewLbl").textContent = vNow;
     document.getElementById("focusLbl").textContent = isoNow;
@@ -603,34 +641,28 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     else if (vNow === "day") el.innerHTML = renderDay(isoNow);
     else el.innerHTML = renderMonth(isoNow);
 
-    // Swipe left/right in all views
+    // Swipe in all views
     attachSwipe(
       el,
       () => (App.getYearModel(dbLoad()).calendar?.defaultView || "month"),
       () => (App.getYearModel(dbLoad()).calendar?.focusDate || today),
       (dir, vX, isoX) => {
-        const newISO = (dir === "next") ? navNext(vX, isoX) : navPrev(vX, isoX);
+        const newISO = dir === "next" ? navNext(vX, isoX) : navPrev(vX, isoX);
 
-        // keep selected date reasonable
         const dbX = dbLoad();
         const yrX = App.getYearModel(dbX);
         const sel = yrX.calendar?.selectedDate || today;
 
         let newSel = sel;
 
-        if (vX === "day") {
-          newSel = newISO;
-        } else if (vX === "week") {
-          // move selection by 7 days (same weekday)
-          newSel = (dir === "next") ? addDays(sel, +7) : addDays(sel, -7);
-        } else if (vX === "month") {
-          // keep day number if possible
+        if (vX === "day") newSel = newISO;
+        else if (vX === "week") newSel = dir === "next" ? addDays(sel, +7) : addDays(sel, -7);
+        else if (vX === "month") {
           const dayNum = Number(sel.slice(8, 10)) || 1;
           const dim = daysInMonth(newISO);
           const d = Math.min(dayNum, dim);
           newSel = `${monthKey(newISO)}-${pad2(d)}`;
         } else {
-          // year
           const y = String(newISO).slice(0, 4);
           newSel = `${y}-01-01`;
         }
@@ -641,17 +673,19 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     );
 
     // Habit toggles (Daily)
-    el.querySelectorAll("input[type='checkbox'][data-habit]").forEach(cb => {
+    el.querySelectorAll("input[type='checkbox'][data-habit]").forEach((cb) => {
       cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
     });
 
-    // Nav buttons inside agenda cards
-    el.querySelectorAll("[data-nav]").forEach(btn => {
-      btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
+    // agenda nav
+    el.querySelectorAll("[data-nav]").forEach((btn) => {
+      btn.onclick = () => {
+        location.hash = btn.getAttribute("data-nav");
+      };
     });
 
-    // WEEK: tap a day -> DAILY (requested)
-    el.querySelectorAll("[data-wday]").forEach(btn => {
+    // WEEK tap => DAILY
+    el.querySelectorAll("[data-wday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-wday");
         savePrefs({ selectedDate: d, focusDate: d });
@@ -659,8 +693,8 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // MONTH: tap a day -> DAILY (gives you “access each day” instantly)
-    el.querySelectorAll("[data-mday]").forEach(btn => {
+    // MONTH tap => DAILY
+    el.querySelectorAll("[data-mday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-mday");
         savePrefs({ selectedDate: d, focusDate: d });
@@ -668,21 +702,22 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // YEAR: tap month title -> MONTH
-    el.querySelectorAll("[data-month]").forEach(btn => {
+    // YEAR month title tap => MONTH
+    el.querySelectorAll("[data-monthtitle]").forEach((btn) => {
       btn.onclick = () => {
-        const m = btn.getAttribute("data-month");
+        const m = btn.getAttribute("data-monthtitle");
         savePrefs({ focusDate: m });
         rerender(m, "month");
       };
     });
 
-    // YEAR: tap ANY mini cell -> MONTH (requested)
-    el.querySelectorAll("[data-yday]").forEach(btn => {
+    // YEAR any day tap => MONTH (requested)
+    el.querySelectorAll("[data-yday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-yday");
-        savePrefs({ selectedDate: d, focusDate: d });
-        rerender(d, "month");
+        const m = btn.getAttribute("data-month");
+        savePrefs({ selectedDate: d, focusDate: m || d });
+        rerender(m || d, "month");
       };
     });
   }
@@ -690,6 +725,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   // ---------- Filters binding ----------
   const bindFilter = (id, key) => {
     const el = document.getElementById(id);
+    if (!el) return;
     el.onchange = () => {
       const db2 = dbLoad();
       const yr2 = App.getYearModel(db2);
@@ -717,62 +753,76 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const dbNow = dbLoad();
     const f = getFocus(dbNow);
 
-    modeEl.value = f.type;
-    goalWrap.style.display = (f.type === "goal") ? "block" : "none";
-    habitWrap.style.display = (f.type === "habit") ? "block" : "none";
+    if (modeEl) modeEl.value = f.type;
+    if (goalWrap) goalWrap.style.display = f.type === "goal" ? "block" : "none";
+    if (habitWrap) habitWrap.style.display = f.type === "habit" ? "block" : "none";
 
-    if (f.type === "goal" && goalEl) goalEl.value = f.id || (goalEl.options[0]?.value || "");
-    if (f.type === "habit" && habitEl) habitEl.value = f.id || (habitEl.options[0]?.value || "");
+    if (f.type === "goal" && goalEl) goalEl.value = f.id || goalEl.options[0]?.value || "";
+    if (f.type === "habit" && habitEl) habitEl.value = f.id || habitEl.options[0]?.value || "";
 
-    document.getElementById("focusNamePill").textContent = focusLabel(dbNow);
+    const pill = document.getElementById("focusNamePill");
+    if (pill) pill.textContent = focusLabel(dbNow);
   }
 
-  modeEl.onchange = () => {
-    const mode = modeEl.value;
-    const db2 = dbLoad();
-    const yr2 = App.getYearModel(db2);
-    yr2.calendar = yr2.calendar || {};
+  if (modeEl) {
+    modeEl.onchange = () => {
+      const mode = modeEl.value;
+      const db2 = dbLoad();
+      const yr2 = App.getYearModel(db2);
+      yr2.calendar = yr2.calendar || {};
 
-    if (mode === "goal") yr2.calendar.focus = { type: "goal", id: goalEl?.value || "" };
-    else if (mode === "habit") yr2.calendar.focus = { type: "habit", id: habitEl?.value || "" };
-    else yr2.calendar.focus = { type: "all", id: "" };
+      if (mode === "goal") yr2.calendar.focus = { type: "goal", id: goalEl?.value || "" };
+      else if (mode === "habit") yr2.calendar.focus = { type: "habit", id: habitEl?.value || "" };
+      else yr2.calendar.focus = { type: "all", id: "" };
 
-    dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
+      dbSave(db2);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    };
+  }
 
-  if (goalEl) goalEl.onchange = () => {
-    const db2 = dbLoad();
-    const yr2 = App.getYearModel(db2);
-    yr2.calendar = yr2.calendar || {};
-    yr2.calendar.focus = { type: "goal", id: goalEl.value || "" };
-    dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
+  if (goalEl) {
+    goalEl.onchange = () => {
+      const db2 = dbLoad();
+      const yr2 = App.getYearModel(db2);
+      yr2.calendar = yr2.calendar || {};
+      yr2.calendar.focus = { type: "goal", id: goalEl.value || "" };
+      dbSave(db2);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    };
+  }
 
-  if (habitEl) habitEl.onchange = () => {
-    const db2 = dbLoad();
-    const yr2 = App.getYearModel(db2);
-    yr2.calendar = yr2.calendar || {};
-    yr2.calendar.focus = { type: "habit", id: habitEl.value || "" };
-    dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
+  if (habitEl) {
+    habitEl.onchange = () => {
+      const db2 = dbLoad();
+      const yr2 = App.getYearModel(db2);
+      yr2.calendar = yr2.calendar || {};
+      yr2.calendar.focus = { type: "habit", id: habitEl.value || "" };
+      dbSave(db2);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    };
+  }
 
-  clearBtn.onclick = () => {
-    const db2 = dbLoad();
-    const yr2 = App.getYearModel(db2);
-    yr2.calendar = yr2.calendar || {};
-    yr2.calendar.focus = { type: "all", id: "" };
-    dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      const db2 = dbLoad();
+      const yr2 = App.getYearModel(db2);
+      yr2.calendar = yr2.calendar || {};
+      yr2.calendar.focus = { type: "all", id: "" };
+      dbSave(db2);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    };
+  }
 
   // ---------- View buttons ----------
-  document.getElementById("vWeek").onclick  = () => rerender(yr.calendar.focusDate || today, "week");
-  document.getElementById("vMonth").onclick = () => rerender(yr.calendar.focusDate || today, "month");
-  document.getElementById("vYear").onclick  = () => rerender(yr.calendar.focusDate || today, "year");
-  document.getElementById("vDay").onclick   = () => rerender(yr.calendar.focusDate || today, "day");
+  const vDay = document.getElementById("vDay");
+  const vWeek = document.getElementById("vWeek");
+  const vMonth = document.getElementById("vMonth");
+  const vYear = document.getElementById("vYear");
+
+  if (vDay) vDay.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "day");
+  if (vWeek) vWeek.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week");
+  if (vMonth) vMonth.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month");
+  if (vYear) vYear.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year");
 
   // First render
   syncFocusUI();
