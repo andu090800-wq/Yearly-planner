@@ -1380,3 +1380,126 @@ textarea:focus{
   .calSegBtn{ padding:7px 10px; font-size:12px; }
   .calToolbar{ gap:8px; }
 }
+/* ===== Calendar iPhone-ish segmented + Daily timeline ===== */
+
+.calTopBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.iosSeg{
+  display:inline-flex;
+  padding:6px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.70);
+  gap:6px;
+}
+
+.iosSeg .segBtn{
+  border:1px solid transparent;
+  background: transparent;
+  color: inherit;
+  border-radius:999px;
+  padding:8px 10px;
+  font:inherit;
+  font-size:12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+.iosSeg .segBtn .segIco{ font-size:13px; line-height:1; }
+.iosSeg .segBtn .segTxt{ font-weight:700; }
+
+.iosSeg .segBtn.on{
+  background: rgba(255,255,255,.92);
+  border-color: rgba(0,0,0,.18);
+  box-shadow: var(--shadow2);
+}
+
+.calFocusPill{
+  white-space:nowrap;
+}
+
+/* Daily */
+.dayHead{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+
+.dayAllDay{
+  border:1px solid var(--border);
+  border-radius:18px;
+  background: rgba(255,255,255,.70);
+  padding:12px;
+}
+.dayAllDayTitle{
+  font-weight:900;
+  font-size:12px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:8px;
+}
+.dayAllDayList{ display:flex; flex-direction:column; gap:8px; }
+
+.dayTimeline{
+  border:1px solid var(--border);
+  border-radius:18px;
+  overflow:hidden;
+  background: rgba(255,255,255,.70);
+}
+
+.dayHourRow{
+  display:grid;
+  grid-template-columns: 64px 1fr;
+  gap:10px;
+  padding:10px 12px;
+  border-top:1px solid var(--border);
+}
+.dayHourRow:first-child{ border-top:none; }
+
+.dayHourLabel{
+  font-size:12px;
+  color:var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding-top:6px;
+}
+
+.dayHourBody{ display:flex; flex-direction:column; gap:8px; min-height:20px; }
+
+.dayEmpty{
+  height:12px;
+  border-radius:10px;
+  background: rgba(0,0,0,.03);
+}
+
+.dayItem{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 10px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.92);
+}
+
+.dayBtn{
+  width:100%;
+  text-align:left;
+  cursor:pointer;
+}
+
+.dayBtn.bad, .agBtn.bad{
+  border-color: rgba(176,0,32,.35);
+}
+
+@media (max-width: 480px){
+  .calFocusPill{ width:100%; }
+  .iosSeg{ width:100%; justify-content:space-between; }
+  .iosSeg .segBtn{ flex:1; justify-content:center; }
+  .dayHourRow{ grid-template-columns: 56px 1fr; }
+}
