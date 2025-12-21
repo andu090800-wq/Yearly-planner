@@ -81,18 +81,6 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     dbSave(db2);
   }
 
-  // ✅ FIX: helper care schimbă view-ul în DB + declanșează re-render global (hashchange)
-  function setView(v, iso, selected) {
-    const db2 = dbLoad();
-    const yr2 = App.getYearModel(db2);
-    yr2.calendar = yr2.calendar || {};
-    yr2.calendar.defaultView = v;
-    if (iso) yr2.calendar.focusDate = iso;
-    if (selected) yr2.calendar.selectedDate = selected;
-    dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  }
-
   // ---------- Habit due + toggle ----------
   function habitDueOn(h, iso) {
     try {
@@ -160,6 +148,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- tiny time helper ----------
+  // Accept: "09:30", "9:30", "09", 9, "9", etc.
   function parseTimeToHour(raw) {
     if (raw == null) return null;
     if (typeof raw === "number" && Number.isFinite(raw)) {
@@ -169,6 +158,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }
     const s = String(raw).trim();
     if (!s) return null;
+    // "09:30"
     const m = s.match(/^(\d{1,2})(?::(\d{2}))?$/);
     if (!m) return null;
     const h = Number(m[1]);
@@ -184,6 +174,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
     const items = [];
 
+    // goals deadlines
     if (filters.goals) {
       for (const g of yrNow.goals || []) {
         if (!passesFocusForGoal(g.id, dbNow)) continue;
@@ -197,6 +188,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       }
     }
 
+    // milestones & tasks
     for (const g of yrNow.goals || []) {
       if (!passesFocusForGoal(g.id, dbNow)) continue;
       const ms = Array.isArray(g.milestones) ? g.milestones : [];
@@ -242,6 +234,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       }
     }
 
+    // habits due
     if (filters.habits) {
       for (const h of yrNow.habits || []) {
         if (!passesFocusForHabit(h, dbNow)) continue;
@@ -330,10 +323,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return toISO(d);
   }
 
-  // ---------- Render: DAILY ----------
+  // ---------- Render: DAILY (iPhone-like timeline) ----------
   function renderDay(iso) {
     const its = itemsForDay(iso);
 
+    // Split into scheduled hours vs all-day
     const byHour = Array.from({ length: 24 }, () => []);
     const allDay = [];
 
@@ -403,7 +397,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: WEEK ----------
+  // ---------- Render: WEEK (tap day => DAILY) ----------
   function renderWeek(anchorISO) {
     const start = startOfWeekMonday(anchorISO);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -419,7 +413,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       const idx = (fromISO(d).getDay() + 6) % 7;
 
       return `
-        <button type="button" class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
+      <button type="button" class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
           <div class="wkDow">${dow[idx]}</div>
           <div class="wkNum">${App.esc(String(Number(d.slice(8, 10))))}</div>
           <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
@@ -439,7 +433,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: MONTH ----------
+  // ---------- Render: MONTH (tap day => DAILY) ----------
   function renderMonth(anchorISO) {
     const monthStart = startOfMonth(anchorISO);
     const gridStart = startOfWeekMonday(monthStart);
@@ -493,11 +487,12 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: YEAR ----------
+  // ---------- Render: YEAR with MINI CALENDARS ----------
+  // ✅ tap ANY mini cell => MONTH view
   function renderYear(anchorISO) {
     const Y = Number(String(anchorISO).slice(0, 4));
     const selected = yr.calendar.selectedDate || today;
-    const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`;
+    const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`);
 
     const monthCards = months.map((m0) => {
       const monthStart = startOfMonth(m0);
@@ -565,13 +560,13 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
             <div class="muted">Swipe left/right to navigate</div>
           </div>
 
+          <!-- iPhone-ish segmented control -->
           <div class="calTopBar">
             <div class="seg iosSeg">
-              <button type="button" class="segBtn" id="vDay"  title="Daily"><span class="segTxt">Day</span></button>
-              <button type="button" class="segBtn" id="vWeek" title="Weekly"><span class="segTxt">Week</span></button>
-              <button type="button" class="segBtn" id="vMonth" title="Monthly"><span class="segTxt">Month</span></button>
-              <button type="button" class="segBtn" id="vYear" title="Yearly"><span class="segTxt">Year</span></button>
-            </div>
+           <button type="button" class="segBtn" id="vDay"  title="Daily"><span class="segTxt">Day</span></button>
+<button type="button" class="segBtn" id="vWeek" title="Weekly"><span class="segTxt">Week</span></button>
+<button type="button" class="segBtn" id="vMonth" title="Monthly"><span class="segTxt">Month</span></button>
+<button type="button" class="segBtn" id="vYear" title="Yearly"><span class="segTxt">Year</span></button>            </div>
 
             <span class="pill calFocusPill">
               <span id="viewLbl">${App.esc(view)}</span> • <b id="focusLbl">${App.esc(focusDate)}</b>
@@ -637,6 +632,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     </div>
   `;
 
+  // segmented highlight
   function paintSeg(v) {
     const map = { day: "vDay", week: "vWeek", month: "vMonth", year: "vYear" };
     ["vDay", "vWeek", "vMonth", "vYear"].forEach((id) => {
@@ -647,12 +643,16 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     if (btn) btn.classList.add("on");
   }
 
-  // ✅ FIX: openDaily numai DB + hashchange (NU rerender direct)
+  // ---------- Rerender ----------
   function openDaily(iso) {
-    const d = iso || today;
-    setView("day", d, d);
-  }
+  const d = iso || today;
 
+  // salvează și schimbă view-ul pe "day"
+  savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
+
+  // RANDĂ IMEDIAT daily în UI (aici era problema)
+  rerender(d, "day");
+}
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
@@ -685,6 +685,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     else if (vNow === "day") el.innerHTML = renderDay(isoNow);
     else el.innerHTML = renderMonth(isoNow);
 
+    // Swipe in all views
     attachSwipe(
       el,
       () => (App.getYearModel(dbLoad()).calendar?.defaultView || "month"),
@@ -715,36 +716,49 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       }
     );
 
+    // Habit toggles (Daily)
     el.querySelectorAll("input[type='checkbox'][data-habit]").forEach((cb) => {
       cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
     });
 
+    // agenda nav
     el.querySelectorAll("[data-nav]").forEach((btn) => {
       btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
     });
 
-    // WEEK tap => DAILY
+    // WEEK tap => DAILY on that date
     el.querySelectorAll("[data-wday]").forEach((btn) => {
-      btn.onclick = () => openDaily(btn.getAttribute("data-wday"));
-    });
-
-    // MONTH tap => DAILY
-    el.querySelectorAll("[data-mday]").forEach((btn) => {
-      btn.onclick = () => openDaily(btn.getAttribute("data-mday"));
-    });
-
-    el.querySelectorAll("[data-monthtitle]").forEach((btn) => {
       btn.onclick = () => {
-        const m = btn.getAttribute("data-monthtitle");
-        setView("month", m, yrNow2.calendar?.selectedDate || today);
+        const d = btn.getAttribute("data-wday");
+        
+        openDaily(d);
       };
     });
 
+    // MONTH tap => DAILY on that date
+    el.querySelectorAll("[data-mday]").forEach((btn) => {
+      btn.onclick = () => {
+        const d = btn.getAttribute("data-mday");
+        openDaily(d);
+      };
+    });
+
+    // YEAR month title tap => MONTH
+    el.querySelectorAll("[data-monthtitle]").forEach((btn) => {
+      btn.onclick = () => {
+        const m = btn.getAttribute("data-monthtitle");
+        savePrefs({ focusDate: m });
+        rerender(m, "month");
+      };
+    });
+
+    // YEAR any day tap => MONTH (not Day/Week)
     el.querySelectorAll("[data-yday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-yday");
         const m = btn.getAttribute("data-month");
-        setView("month", m || d, d);
+        savePrefs({ selectedDate: d, focusDate: m || d });
+        rerender(m || d, "month");
       };
     });
   }
@@ -846,11 +860,12 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const vMonth = document.getElementById("vMonth");
   const vYear = document.getElementById("vYear");
 
-  // ✅ FIX: toate butoanele trec prin DB + hashchange (flux consistent)
-  if (vDay) vDay.onclick = (e) => { e.preventDefault(); openDaily(today); };
-  if (vWeek) vWeek.onclick = (e) => { e.preventDefault(); setView("week", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
-  if (vMonth) vMonth.onclick = (e) => { e.preventDefault(); setView("month", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
-  if (vYear) vYear.onclick = (e) => { e.preventDefault(); setView("year", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
+  // ✅ Daily button always goes to TODAY automatically
+  if (vDay) vDay.onclick = () => openDaily(today);
+
+  if (vWeek) vWeek.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week");
+  if (vMonth) vMonth.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month");
+  if (vYear) vYear.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year");
 
   // First render
   syncFocusUI();
