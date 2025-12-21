@@ -645,6 +645,15 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- Rerender ----------
+  function openDaily(iso) {
+  const d = iso || today;
+  savePrefs({
+    defaultView: "day",
+    focusDate: d,
+    selectedDate: d
+  });
+  rerender(d, "day");
+}
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
