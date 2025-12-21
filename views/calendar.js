@@ -147,6 +147,25 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return true;
   }
 
+  // ---------- tiny time helper ----------
+  // Accept: "09:30", "9:30", "09", 9, "9", etc.
+  function parseTimeToHour(raw) {
+    if (raw == null) return null;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      const h = Math.floor(raw);
+      if (h >= 0 && h <= 23) return h;
+      return null;
+    }
+    const s = String(raw).trim();
+    if (!s) return null;
+    // "09:30"
+    const m = s.match(/^(\d{1,2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const h = Number(m[1]);
+    if (!Number.isFinite(h) || h < 0 || h > 23) return null;
+    return h;
+  }
+
   // ---------- Items for day ----------
   function itemsForDay(iso) {
     const dbNow = dbLoad();
@@ -161,10 +180,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
         if (!passesFocusForGoal(g.id, dbNow)) continue;
 
         if ((g.endDate || "").trim() && g.endDate === iso) {
-          items.push({ kind: "goal", title: `Goal deadline: ${g.title}`, overdue: false, nav: `#/goal/${g.id}` });
+          items.push({ kind: "goal", title: `Goal deadline: ${g.title}`, overdue: false, nav: `#/goal/${g.id}`, time: g.time || g.at || g.startTime });
         }
         if (iso === today && (g.endDate || "").trim() && g.endDate < today) {
-          items.push({ kind: "goal", title: `Overdue goal: ${g.title}`, overdue: true, nav: `#/goal/${g.id}` });
+          items.push({ kind: "goal", title: `Overdue goal: ${g.title}`, overdue: true, nav: `#/goal/${g.id}`, time: g.time || g.at || g.startTime });
         }
       }
     }
@@ -177,7 +196,13 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       if (filters.milestones) {
         for (const m of ms) {
           if ((m.dueDate || "").trim() && m.dueDate === iso) {
-            items.push({ kind: "milestone", title: `Milestone: ${m.title} (${g.title})`, overdue: false, nav: `#/goal/${g.id}` });
+            items.push({
+              kind: "milestone",
+              title: `Milestone: ${m.title} (${g.title})`,
+              overdue: false,
+              nav: `#/goal/${g.id}`,
+              time: m.time || m.at || m.startTime
+            });
           }
         }
       }
@@ -191,11 +216,18 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
                 kind: "task",
                 title: `${t.done ? "✅ " : ""}Task: ${t.title} (${g.title})`,
                 overdue: !t.done && t.dueDate < today,
-                nav: `#/goal/${g.id}`
+                nav: `#/goal/${g.id}`,
+                time: t.time || t.at || t.startTime
               });
             }
             if (iso === today && !t.done && (t.dueDate || "").trim() && t.dueDate < today) {
-              items.push({ kind: "task", title: `Overdue: ${t.title} (${g.title})`, overdue: true, nav: `#/goal/${g.id}` });
+              items.push({
+                kind: "task",
+                title: `Overdue: ${t.title} (${g.title})`,
+                overdue: true,
+                nav: `#/goal/${g.id}`,
+                time: t.time || t.at || t.startTime
+              });
             }
           }
         }
@@ -207,13 +239,20 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       for (const h of yrNow.habits || []) {
         if (!passesFocusForHabit(h, dbNow)) continue;
         if (!habitDueOn(h, iso)) continue;
-        items.push({ kind: "habit", title: h.title, overdue: false, habitId: h.id, done: !!h.checks?.[iso] });
+        items.push({
+          kind: "habit",
+          title: h.title,
+          overdue: false,
+          habitId: h.id,
+          done: !!h.checks?.[iso],
+          time: h.time || h.at || h.timeOfDay
+        });
       }
     }
 
     const order = { task: 1, milestone: 2, goal: 3, habit: 4 };
     items.sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      if (!!a.overdue !== !!b.overdue) return a.overdue ? -1 : 1;
       return (order[a.kind] || 99) - (order[b.kind] || 99);
     });
 
@@ -223,56 +262,39 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   // ---------- Swipe ----------
   function attachSwipe(el, getView, getISO, onMove) {
     if (!el) return;
-    let sx = 0,
-      sy = 0,
+    let sx = 0, sy = 0, tracking = false;
+
+    el.addEventListener("touchstart", (e) => {
+      const t = e.touches?.[0];
+      if (!t) return;
+      sx = t.clientX; sy = t.clientY;
+      tracking = true;
+    }, { passive: true });
+
+    el.addEventListener("touchmove", (e) => {
+      if (!tracking) return;
+      const t = e.touches?.[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      if (Math.abs(dy) > Math.abs(dx)) return;
+      e.preventDefault();
+    }, { passive: false });
+
+    el.addEventListener("touchend", (e) => {
+      if (!tracking) return;
       tracking = false;
+      const t = e.changedTouches?.[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
 
-    el.addEventListener(
-      "touchstart",
-      (e) => {
-        const t = e.touches?.[0];
-        if (!t) return;
-        sx = t.clientX;
-        sy = t.clientY;
-        tracking = true;
-      },
-      { passive: true }
-    );
+      if (Math.abs(dx) < 60) return;
+      if (Math.abs(dy) > 70) return;
 
-    el.addEventListener(
-      "touchmove",
-      (e) => {
-        if (!tracking) return;
-        const t = e.touches?.[0];
-        if (!t) return;
-        const dx = t.clientX - sx;
-        const dy = t.clientY - sy;
-        if (Math.abs(dy) > Math.abs(dx)) return; // allow vertical scroll
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    el.addEventListener(
-      "touchend",
-      (e) => {
-        if (!tracking) return;
-        tracking = false;
-
-        const t = e.changedTouches?.[0];
-        if (!t) return;
-
-        const dx = t.clientX - sx;
-        const dy = t.clientY - sy;
-
-        if (Math.abs(dx) < 60) return;
-        if (Math.abs(dy) > 70) return;
-
-        const dir = dx < 0 ? "next" : "prev";
-        onMove(dir, getView(), getISO());
-      },
-      { passive: true }
-    );
+      const dir = dx < 0 ? "next" : "prev";
+      onMove(dir, getView(), getISO());
+    }, { passive: true });
   }
 
   // ---------- Nav (swipe only) ----------
@@ -288,7 +310,6 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     d.setFullYear(d.getFullYear() - 1);
     return toISO(d);
   }
-
   function navNext(v, iso) {
     if (v === "day") return addDays(iso, +1);
     if (v === "week") return addDays(iso, +7);
@@ -302,45 +323,75 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return toISO(d);
   }
 
-  // ---------- Render: DAILY ----------
+  // ---------- Render: DAILY (iPhone-like timeline) ----------
   function renderDay(iso) {
     const its = itemsForDay(iso);
 
-    const list = its.length
-      ? its
-          .map((it) => {
-            if (it.kind === "habit") {
-              return `
-                <div class="agRow">
-                  <label class="agHabit">
-                    <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(iso)}" />
-                    <span class="agTitle">${App.esc(it.title)}</span>
-                  </label>
-                  <span class="agTag">habit</span>
-                </div>
-              `;
-            }
-            return `
-              <button class="agRow agBtn ${it.overdue ? "bad" : ""}" data-nav="${App.esc(it.nav)}">
-                <div class="agText">
-                  <div class="agTitle">${App.esc(it.title)}</div>
-                  <div class="agSub">${App.esc(it.kind)}</div>
-                </div>
-                <span class="agTag ${it.overdue ? "bad" : ""}">${App.esc(it.kind)}</span>
-              </button>
-            `;
-          })
-          .join("")
-      : `<div class="muted">No items.</div>`;
+    // Split into scheduled hours vs all-day
+    const byHour = Array.from({ length: 24 }, () => []);
+    const allDay = [];
+
+    for (const it of its) {
+      const hour = parseTimeToHour(it.time);
+      if (hour == null) allDay.push(it);
+      else byHour[hour].push(it);
+    }
+
+    const renderItem = (it, forISO) => {
+      if (it.kind === "habit") {
+        return `
+          <div class="dayItem dayHabit">
+            <label class="agHabit">
+              <input type="checkbox" ${it.done ? "checked" : ""} data-habit="${App.esc(it.habitId)}" data-date="${App.esc(forISO)}" />
+              <span class="agTitle">${App.esc(it.title)}</span>
+            </label>
+            <span class="agTag">habit</span>
+          </div>
+        `;
+      }
+      return `
+        <button class="dayItem dayBtn ${it.overdue ? "bad" : ""}" data-nav="${App.esc(it.nav)}">
+          <div class="agText">
+            <div class="agTitle">${App.esc(it.title)}</div>
+            <div class="agSub">${App.esc(it.kind)}</div>
+          </div>
+          <span class="agTag ${it.overdue ? "bad" : ""}">${App.esc(it.kind)}</span>
+        </button>
+      `;
+    };
+
+    const allDayHtml = allDay.length
+      ? allDay.map((it) => renderItem(it, iso)).join("")
+      : `<div class="muted">No all-day items.</div>`;
+
+    const hoursHtml = Array.from({ length: 24 }, (_, h) => {
+      const slot = byHour[h];
+      const slotHtml = slot.length
+        ? slot.map((it) => renderItem(it, iso)).join("")
+        : `<div class="dayEmpty"></div>`;
+
+      return `
+        <div class="dayHourRow">
+          <div class="dayHourLabel">${pad2(h)}:00</div>
+          <div class="dayHourBody">${slotHtml}</div>
+        </div>
+      `;
+    }).join("");
 
     return `
       <div class="card big stack" style="gap:12px">
-        <div class="wkHead">
+        <div class="dayHead">
           <div class="title2">Daily</div>
           <span class="pill">${App.esc(fmtPrettyRO(iso))}${iso === today ? " • Today" : ""}</span>
         </div>
-        <div class="agWrap">
-          <div class="agList">${list}</div>
+
+        <div class="dayAllDay">
+          <div class="dayAllDayTitle">All-day</div>
+          <div class="dayAllDayList">${allDayHtml}</div>
+        </div>
+
+        <div class="dayTimeline">
+          ${hoursHtml}
         </div>
       </div>
     `;
@@ -353,35 +404,22 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const sel = yr.calendar.selectedDate || today;
     const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-    const strip = days
-      .map((d) => {
-        const its = itemsForDay(d);
-        const hasAny = its.length > 0;
-        const isToday = d === today;
-        const isSel = d === sel;
-        const hasOverdue = its.some((x) => x.overdue);
-        const idx = (fromISO(d).getDay() + 6) % 7;
+    const strip = days.map((d) => {
+      const its = itemsForDay(d);
+      const hasAny = its.length > 0;
+      const isToday = d === today;
+      const isSel = d === sel;
+      const hasOverdue = its.some((x) => x.overdue);
+      const idx = (fromISO(d).getDay() + 6) % 7;
 
-        return `
-          <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
-            <div class="wkDow">${dow[idx]}</div>
-            <div class="wkNum">${App.esc(String(Number(d.slice(8, 10))))}</div>
-            <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
-          </button>
-        `;
-      })
-      .join("");
-
-    // show mini agenda preview (optional, feels more iPhone)
-    const preview = itemsForDay(sel)
-      .slice(0, 6)
-      .map((it) => {
-        if (it.kind === "habit") {
-          return `<div class="muted">• Habit: ${App.esc(it.title)}</div>`;
-        }
-        return `<div class="muted">• ${App.esc(it.title)}</div>`;
-      })
-      .join("");
+      return `
+        <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
+          <div class="wkDow">${dow[idx]}</div>
+          <div class="wkNum">${App.esc(String(Number(d.slice(8, 10))))}</div>
+          <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
+        </button>
+      `;
+    }).join("");
 
     return `
       <div class="card big stack" style="gap:12px">
@@ -389,11 +427,8 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
           <div class="title2">Week</div>
           <span class="pill">${App.esc(start)} → ${App.esc(addDays(start, 6))}</span>
         </div>
-
         <div class="wkStrip">${strip}</div>
-
-        <div class="pill">Tap any day → <b>Daily</b></div>
-        ${preview ? `<div class="cardTap" style="padding:12px;border-radius:18px;border:1px solid var(--border);">${preview}</div>` : ``}
+        <div class="muted">Tap any day to open Daily.</div>
       </div>
     `;
   }
@@ -417,35 +452,31 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
     const selected = yr.calendar.selectedDate || today;
 
-    const cellHtml = cells
-      .map((d) => {
-        const inMonth = monthKey(d) === monthKey(anchorISO);
-        const its = itemsForDay(d);
+    const cellHtml = cells.map((d) => {
+      const inMonth = monthKey(d) === monthKey(anchorISO);
+      const its = itemsForDay(d);
 
-        const hasOverdue = its.some((x) => x.overdue);
-        const isToday = d === today;
-        const isSel = d === selected;
+      const hasOverdue = its.some((x) => x.overdue);
+      const isToday = d === today;
+      const isSel = d === selected;
 
-        const hasTasks = its.some((x) => x.kind === "task" || x.kind === "milestone");
-        const hasHabits = its.some((x) => x.kind === "habit");
-        const hasGoals = its.some((x) => x.kind === "goal");
+      const hasTasks = its.some((x) => x.kind === "task" || x.kind === "milestone");
+      const hasHabits = its.some((x) => x.kind === "habit");
+      const hasGoals = its.some((x) => x.kind === "goal");
 
-        return `
-          <button class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${
-          hasOverdue ? "bad" : ""
-        }" data-mday="${App.esc(d)}">
-            <div class="calCellTop">
-              <span class="calCellNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
-            </div>
-            <div class="calDots">
-              ${hasTasks ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-              ${hasHabits ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-              ${hasGoals ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
-            </div>
-          </button>
-        `;
-      })
-      .join("");
+      return `
+        <button class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}" data-mday="${App.esc(d)}">
+          <div class="calCellTop">
+            <span class="calCellNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
+          </div>
+          <div class="calDots">
+            ${hasTasks ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+            ${hasHabits ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+            ${hasGoals ? `<span class="calDot"></span>` : `<span class="calDot ghost"></span>`}
+          </div>
+        </button>
+      `;
+    }).join("");
 
     return `
       <div class="card big stack">
@@ -463,48 +494,43 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const selected = yr.calendar.selectedDate || today;
     const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`);
 
-    const monthCards = months
-      .map((m0) => {
-        const monthStart = startOfMonth(m0);
-        const gridStart = startOfWeekMonday(monthStart);
-        const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+    const monthCards = months.map((m0) => {
+      const monthStart = startOfMonth(m0);
+      const gridStart = startOfWeekMonday(monthStart);
+      const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 
-        const monthName = fromISO(monthStart).toLocaleString("ro-RO", { month: "long" });
-        const monthLabel = `${monthName} ${Y}`;
+      const monthName = fromISO(monthStart).toLocaleString("ro-RO", { month: "long" });
+      const monthLabel = `${monthName} ${Y}`;
 
-        const miniCells = cells
-          .map((d) => {
-            const inMonth = monthKey(d) === monthKey(m0);
-            const its = itemsForDay(d);
-            const hasAny = its.length > 0;
-            const hasOverdue = its.some((x) => x.overdue);
-            const isToday = d === today;
-            const isSel = d === selected;
-
-            return `
-              <button class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${
-              hasOverdue ? "bad" : ""
-            }" data-yday="${App.esc(d)}" data-month="${App.esc(m0)}">
-                <span class="yMiniNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
-                ${hasAny ? `<span class="yMiniDot"></span>` : ``}
-              </button>
-            `;
-          })
-          .join("");
+      const miniCells = cells.map((d) => {
+        const inMonth = monthKey(d) === monthKey(m0);
+        const its = itemsForDay(d);
+        const hasAny = its.length > 0;
+        const hasOverdue = its.some((x) => x.overdue);
+        const isToday = d === today;
+        const isSel = d === selected;
 
         return `
-          <div class="yMiniCard">
-            <button class="yMiniTitle" data-monthtitle="${App.esc(m0)}">${App.esc(monthLabel)}</button>
-            <div class="yMiniDow">
-              <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-            </div>
-            <div class="yMiniGrid">
-              ${miniCells}
-            </div>
-          </div>
+          <button class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}"
+                  data-yday="${App.esc(d)}" data-month="${App.esc(m0)}">
+            <span class="yMiniNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
+            ${hasAny ? `<span class="yMiniDot"></span>` : ``}
+          </button>
         `;
-      })
-      .join("");
+      }).join("");
+
+      return `
+        <div class="yMiniCard">
+          <button class="yMiniTitle" data-monthtitle="${App.esc(m0)}">${App.esc(monthLabel)}</button>
+          <div class="yMiniDow">
+            <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+          </div>
+          <div class="yMiniGrid">
+            ${miniCells}
+          </div>
+        </div>
+      `;
+    }).join("");
 
     return `
       <div class="card big stack" style="gap:12px">
@@ -521,6 +547,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ---------- UI ----------
   const filters = yr.calendar.filters;
+
   const goalOptions = (yr.goals || []).map((g) => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
   const habitOptions = (yr.habits || []).map((h) => `<option value="${App.esc(h.id)}">${App.esc(h.title)}</option>`).join("");
 
@@ -533,14 +560,18 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
             <div class="muted">Swipe left/right to navigate</div>
           </div>
 
-          <div class="row" style="justify-content:space-between; gap:10px;">
-            <div class="seg">
-              <button class="segBtn" id="vDay">Daily</button>
-              <button class="segBtn" id="vWeek">Weekly</button>
-              <button class="segBtn" id="vMonth">Monthly</button>
-              <button class="segBtn" id="vYear">Yearly</button>
+          <!-- iPhone-ish segmented control -->
+          <div class="calTopBar">
+            <div class="seg iosSeg">
+              <button class="segBtn" id="vDay"  title="Daily"><span class="segIco">🗓️</span><span class="segTxt">Day</span></button>
+              <button class="segBtn" id="vWeek" title="Weekly"><span class="segIco">📅</span><span class="segTxt">Week</span></button>
+              <button class="segBtn" id="vMonth" title="Monthly"><span class="segIco">🧩</span><span class="segTxt">Month</span></button>
+              <button class="segBtn" id="vYear" title="Yearly"><span class="segIco">🗂️</span><span class="segTxt">Year</span></button>
             </div>
-            <span class="pill">Focus <b id="focusLbl">${App.esc(focusDate)}</b> • <span id="viewLbl">${App.esc(view)}</span></span>
+
+            <span class="pill calFocusPill">
+              <span id="viewLbl">${App.esc(view)}</span> • <b id="focusLbl">${App.esc(focusDate)}</b>
+            </span>
           </div>
 
           <details class="ff" id="ffBox">
@@ -630,9 +661,14 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const vNow = yrNow2.calendar?.defaultView || "month";
     const isoNow = yrNow2.calendar?.focusDate || today;
 
-    document.getElementById("viewLbl").textContent = vNow;
-    document.getElementById("focusLbl").textContent = isoNow;
-    document.getElementById("focusNamePill").textContent = focusLabel(dbNow2);
+    const viewLbl = document.getElementById("viewLbl");
+    const focusLbl = document.getElementById("focusLbl");
+    if (viewLbl) viewLbl.textContent = vNow;
+    if (focusLbl) focusLbl.textContent = isoNow;
+
+    const focusName = document.getElementById("focusNamePill");
+    if (focusName) focusName.textContent = focusLabel(dbNow2);
+
     paintSeg(vNow);
 
     const el = document.getElementById("calBody");
@@ -679,12 +715,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
     // agenda nav
     el.querySelectorAll("[data-nav]").forEach((btn) => {
-      btn.onclick = () => {
-        location.hash = btn.getAttribute("data-nav");
-      };
+      btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
     });
 
-    // WEEK tap => DAILY
+    // WEEK tap => DAILY on that date
     el.querySelectorAll("[data-wday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-wday");
@@ -693,7 +727,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // MONTH tap => DAILY
+    // MONTH tap => DAILY on that date
     el.querySelectorAll("[data-mday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-mday");
@@ -711,7 +745,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // YEAR any day tap => MONTH (requested)
+    // YEAR any day tap => MONTH (not Day/Week)
     el.querySelectorAll("[data-yday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-yday");
@@ -819,7 +853,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const vMonth = document.getElementById("vMonth");
   const vYear = document.getElementById("vYear");
 
-  if (vDay) vDay.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "day");
+  // ✅ Daily button always goes to TODAY automatically
+  if (vDay) vDay.onclick = () => rerender(today, "day");
+
   if (vWeek) vWeek.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week");
   if (vMonth) vMonth.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month");
   if (vYear) vYear.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year");
