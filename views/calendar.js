@@ -864,13 +864,29 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- View buttons ----------
-  const vDay = document.getElementById("vDay");
-  const vWeek = document.getElementById("vWeek");
-  const vMonth = document.getElementById("vMonth");
-  const vYear = document.getElementById("vYear");
+  // ✅ Event delegation (prinde click-ul chiar dacă UI-ul se reface)
+App.viewEl.addEventListener("click", (e) => {
+  const t = e.target.closest("#vDay, #vWeek, #vMonth, #vYear, [data-wday], [data-mday]");
+  if (!t) return;
 
-  // ✅ FIX: toate butoanele trec prin DB + hashchange (flux consistent)
-  if (vDay) vDay.onclick = (e) => { e.preventDefault(); openDaily(today); };
+  // Day button
+  if (t.id === "vDay") {
+    e.preventDefault(); e.stopPropagation();
+    return openDaily(today);
+  }
+
+  // Week/Month/Year buttons (lăsăm rerender ca înainte)
+  if (t.id === "vWeek") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "week"); }
+  if (t.id === "vMonth") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "month"); }
+  if (t.id === "vYear") { e.preventDefault(); return rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, "year"); }
+
+  // Tap pe zi în Week/Month => Daily
+  const w = t.getAttribute("data-wday");
+  if (w) { e.preventDefault(); e.stopPropagation(); return openDaily(w); }
+
+  const m = t.getAttribute("data-mday");
+  if (m) { e.preventDefault(); e.stopPropagation(); return openDaily(m); }
+}, true);
   if (vWeek) vWeek.onclick = (e) => { e.preventDefault(); setView("week", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
   if (vMonth) vMonth.onclick = (e) => { e.preventDefault(); setView("month", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
   if (vYear) vYear.onclick = (e) => { e.preventDefault(); setView("year", App.getYearModel(dbLoad()).calendar?.focusDate || today, App.getYearModel(dbLoad()).calendar?.selectedDate || today); };
