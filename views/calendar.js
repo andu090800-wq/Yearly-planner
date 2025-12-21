@@ -511,7 +511,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
         const isSel = d === selected;
 
         return `
-          <button class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}"
+          <button type="button" class="yMiniCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}"
                   data-yday="${App.esc(d)}" data-month="${App.esc(m0)}">
             <span class="yMiniNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
             ${hasAny ? `<span class="yMiniDot"></span>` : ``}
@@ -521,7 +521,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
       return `
         <div class="yMiniCard">
-          <button class="yMiniTitle" data-monthtitle="${App.esc(m0)}">${App.esc(monthLabel)}</button>
+          <button type="button" class="yMiniTitle" data-monthtitle="${App.esc(m0)}">${App.esc(monthLabel)}</button>
           <div class="yMiniDow">
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
