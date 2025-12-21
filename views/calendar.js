@@ -648,10 +648,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function openDaily(iso) {
   const d = iso || today;
 
+  // salvează și schimbă view-ul pe "day"
   savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
 
-  // forțează re-render-ul global al aplicației (ăsta e motivul pt care rămâneai în Weekly)
-  window.dispatchEvent(new HashChangeEvent("hashchange"));
+  // RANDĂ IMEDIAT daily în UI (aici era problema)
+  rerender(d, "day");
 }
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
