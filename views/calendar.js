@@ -413,7 +413,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       const idx = (fromISO(d).getDay() + 6) % 7;
 
       return `
-        <button class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
+      <button type="button" class="wkDay ${isSel ? "sel" : ""} ${isToday ? "today" : ""} ${hasOverdue ? "bad" : ""}" data-wday="${App.esc(d)}">
           <div class="wkDow">${dow[idx]}</div>
           <div class="wkNum">${App.esc(String(Number(d.slice(8, 10))))}</div>
           <div class="wkDot ${hasAny ? "" : "ghost"}"></div>
