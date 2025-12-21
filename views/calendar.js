@@ -652,7 +652,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     focusDate: d,
     selectedDate: d
   });
-  rerender(d, "day");
+  openDaily(d);
 }
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
@@ -732,7 +732,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-wday");
         savePrefs({ selectedDate: d, focusDate: d });
-        rerender(d, "day");
+        openDaily(d);
       };
     });
 
@@ -741,7 +741,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-mday");
         savePrefs({ selectedDate: d, focusDate: d });
-        rerender(d, "day");
+        openDaily(d);
       };
     });
 
