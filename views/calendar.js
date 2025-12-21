@@ -731,7 +731,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     el.querySelectorAll("[data-wday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-wday");
-        savePrefs({ selectedDate: d, focusDate: d });
+        
         openDaily(d);
       };
     });
@@ -740,7 +740,6 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     el.querySelectorAll("[data-mday]").forEach((btn) => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-mday");
-        savePrefs({ selectedDate: d, focusDate: d });
         openDaily(d);
       };
     });
