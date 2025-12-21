@@ -563,11 +563,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
           <!-- iPhone-ish segmented control -->
           <div class="calTopBar">
             <div class="seg iosSeg">
-              <button class="segBtn" id="vDay"  title="Daily"><span class="segTxt">Day</span></button>
-              <button class="segBtn" id="vWeek" title="Weekly"><span class="segTxt">Week</span></button>
-              <button class="segBtn" id="vMonth" title="Monthly"><span class="segTxt">Month</span></button>
-              <button class="segBtn" id="vYear" title="Yearly"><span class="segTxt">Year</span></button>
-            </div>
+           <button type="button" class="segBtn" id="vDay"  title="Daily"><span class="segTxt">Day</span></button>
+<button type="button" class="segBtn" id="vWeek" title="Weekly"><span class="segTxt">Week</span></button>
+<button type="button" class="segBtn" id="vMonth" title="Monthly"><span class="segTxt">Month</span></button>
+<button type="button" class="segBtn" id="vYear" title="Yearly"><span class="segTxt">Year</span></button>            </div>
 
             <span class="pill calFocusPill">
               <span id="viewLbl">${App.esc(view)}</span> • <b id="focusLbl">${App.esc(focusDate)}</b>
