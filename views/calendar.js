@@ -649,9 +649,32 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ✅ FIX: openDaily numai DB + hashchange (NU rerender direct)
   function openDaily(iso) {
-    const d = iso || today;
-    setView("day", d, d);
-  }
+  const d = iso || today;
+
+  // salvează preferința (ca să rămână pe "day" dacă reîncarcă)
+  savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
+
+  // FORȚEAZĂ randarea imediat în UI (nu depinde de router/hashchange)
+  const el = document.getElementById("calBody");
+  if (!el) return;
+
+  // update labels + highlight
+  const viewLbl = document.getElementById("viewLbl");
+  const focusLbl = document.getElementById("focusLbl");
+  if (viewLbl) viewLbl.textContent = "day";
+  if (focusLbl) focusLbl.textContent = d;
+  paintSeg("day");
+
+  el.innerHTML = renderDay(d);
+
+  // re-atașează handler-ele din Daily
+  el.querySelectorAll("input[type='checkbox'][data-habit]").forEach((cb) => {
+    cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
+  });
+  el.querySelectorAll("[data-nav]").forEach((btn) => {
+    btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
+  });
+}
 
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
