@@ -10,16 +10,29 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const yr = App.getYearModel(db);
   const today = dbTodayISO();
 
-  setPrimary("+ Add", () => {
-    const choice = prompt("Add: goal / habit / budget ?", "goal");
-    if (!choice) return;
-    const c = choice.toLowerCase().trim();
-    if (c.startsWith("g")) return App.navTo("#/goals");
-    if (c.startsWith("h")) return App.navTo("#/habits");
-    if (c.startsWith("b")) return App.navTo("#/budget");
-    App.navTo("#/goals");
-  });
+  // ---------- Hide global top bar on Calendar ----------
+  function setTopBarHidden(hidden) {
+    const top = document.querySelector(".top");
+    if (top) top.style.display = hidden ? "none" : "";
+  }
 
+  // Hide now
+  setTopBarHidden(true);
+
+  // Restore when leaving Calendar
+  const restoreOnLeave = () => {
+    const h = String(location.hash || "");
+    if (!h.startsWith("#/calendar")) {
+      setTopBarHidden(false);
+      window.removeEventListener("hashchange", restoreOnLeave);
+    }
+  };
+  window.addEventListener("hashchange", restoreOnLeave);
+
+  // remove primary button on calendar
+  try { setPrimary(null); } catch { try { setPrimary("", () => {}); } catch {} }
+
+  // optional crumb is still ok (top hidden anyway)
   App.setCrumb(`Calendar • ${year}`);
 
   // ---------- Date helpers ----------
@@ -48,18 +61,20 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return toISO(d);
   };
 
-  // ---------- Calendar prefs (per year) ----------
+  // ---------- Calendar prefs ----------
   yr.calendar = yr.calendar || {
     defaultView: "month",
     filters: { tasks: true, habits: true, milestones: true, goals: true },
     focus: { type: "all", id: "" },
     focusDate: today,
-    selectedDate: today
+    selectedDate: today,
+    panelsOpen: false
   };
   yr.calendar.filters = yr.calendar.filters || { tasks: true, habits: true, milestones: true, goals: true };
   yr.calendar.focus = yr.calendar.focus || { type: "all", id: "" };
   yr.calendar.focusDate = yr.calendar.focusDate || today;
   yr.calendar.selectedDate = yr.calendar.selectedDate || today;
+  yr.calendar.panelsOpen = !!yr.calendar.panelsOpen;
 
   if (!["week", "month", "year"].includes(yr.calendar.defaultView)) yr.calendar.defaultView = "month";
 
@@ -138,7 +153,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return true;
   }
 
-  // ---------- Items for day ----------
+  // ---------- Items ----------
   function itemsForDay(iso) {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
@@ -251,7 +266,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       if (!t) return;
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
-      if (Math.abs(dy) > Math.abs(dx)) return; // allow vertical scroll
+      if (Math.abs(dy) > Math.abs(dx)) return;
       e.preventDefault();
     }, { passive: false });
 
@@ -273,7 +288,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }, { passive: true });
   }
 
-  // ---------- Render: WEEK (iPhone strip + agenda) ----------
+  // ---------- Render: WEEK ----------
   function renderWeek(anchorISO) {
     const start = startOfWeekMonday(anchorISO);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -322,12 +337,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }).join("") : `<div class="muted">No items.</div>`;
 
     return `
-      <div class="card big stack" style="gap:12px">
-        <div class="wkHead">
-          <div class="title2">Week</div>
-          <span class="pill">${App.esc(start)} → ${App.esc(addDays(start,6))}</span>
-        </div>
-
+      <div class="calCard stack" style="gap:12px">
         <div class="wkStrip">${strip}</div>
 
         <div class="agWrap">
@@ -341,7 +351,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: MONTH (circle + dots) ----------
+  // ---------- Render: MONTH ----------
   function renderMonth(anchorISO) {
     const monthStart = startOfMonth(anchorISO);
     const gridStart = startOfWeekMonday(monthStart);
@@ -384,7 +394,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }).join("");
 
     return `
-      <div class="card big stack">
+      <div class="calCard stack">
         ${header}
         <div class="calGrid calGridHead">${dow}</div>
         <div class="calGrid">${cellHtml}</div>
@@ -392,11 +402,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: YEAR with MINI CALENDARS ----------
+  // ---------- Render: YEAR ----------
   function renderYear(anchorISO) {
     const Y = Number(String(anchorISO).slice(0, 4));
     const selected = (yr.calendar.selectedDate || today);
-
     const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`);
 
     const monthCards = months.map(m0 => {
@@ -438,11 +447,8 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }).join("");
 
     return `
-      <div class="card big stack" style="gap:12px">
-        <div>
-          <div class="title2">Year ${App.esc(String(Y))}</div>
-          <div class="muted">Swipe left/right • Tap a month title → Month • Tap a day → Week</div>
-        </div>
+      <div class="calCard stack" style="gap:12px">
+        <div class="muted">Swipe left/right • Tap a month title → Month • Tap a day → Week</div>
         <div class="yMiniWrap">
           ${monthCards}
         </div>
@@ -450,7 +456,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- UI ----------
+  // ---------- UI (new layout) ----------
   const filters = yr.calendar.filters;
 
   const goalOptions = (yr.goals || [])
@@ -463,76 +469,114 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   App.viewEl.innerHTML = `
     <div class="stack">
-      <div class="card big">
-        <div class="stack" style="gap:10px">
-          <div>
-            <div class="title2">Calendar</div>
-            <div class="muted">Swipe works in week/month/year • Month is default</div>
-          </div>
 
+      <!-- Page header (replaces Plans) -->
+      <div class="calPageHead">
+        <div>
+          <div class="calPageTitle">Calendar</div>
+          <div class="calPageSub">${App.esc(String(year))}</div>
+        </div>
+        <button class="btn small" id="calAddBtn">+ Add</button>
+      </div>
+
+      <!-- Collapsible panel for Focus + Filters -->
+      <details class="calDetails" id="calDetails">
+        <summary class="calSummary">
+          <span>Focus & Filters</span>
+          <span class="calSummaryHint">tap to expand</span>
+        </summary>
+
+        <div class="card big stack" style="margin-top:10px">
+          <div class="title2">Focus</div>
+          <div class="muted">Show everything, or focus on one goal / one habit.</div>
+
+          <div class="row" style="align-items:flex-end">
+            <div style="min-width:160px">
+              <div class="muted">Mode</div>
+              <select id="focusMode" class="input">
+                <option value="all">All</option>
+                <option value="goal">One goal</option>
+                <option value="habit">One habit</option>
+              </select>
+            </div>
+
+            <div id="focusGoalWrap" style="min-width:220px; display:none">
+              <div class="muted">Goal</div>
+              <select id="focusGoalId" class="input">
+                ${goalOptions || `<option value="">(no goals)</option>`}
+              </select>
+            </div>
+
+            <div id="focusHabitWrap" style="min-width:220px; display:none">
+              <div class="muted">Habit</div>
+              <select id="focusHabitId" class="input">
+                ${habitOptions || `<option value="">(no habits)</option>`}
+              </select>
+            </div>
+
+            <button class="btn secondary" id="clearFocusBtn">Clear</button>
+            <span class="pill" id="focusNamePill">${App.esc(focusLabel(db))}</span>
+          </div>
+        </div>
+
+        <div class="card big stack">
+          <div class="title2">Filters</div>
           <div class="row">
-            <button class="btn secondary small" id="prevBtn">Prev</button>
-            <button class="btn secondary small" id="todayBtn">Today</button>
-            <button class="btn secondary small" id="nextBtn">Next</button>
-
-            <span class="pill">Focus date <b id="focusLbl">${App.esc(focusDate)}</b></span>
-            <span class="pill">View <b id="viewLbl">${App.esc(view)}</b></span>
+            <label class="pill"><input type="checkbox" id="fTasks" ${filters.tasks ? "checked" : ""}/> tasks</label>
+            <label class="pill"><input type="checkbox" id="fHabits" ${filters.habits ? "checked" : ""}/> habits</label>
+            <label class="pill"><input type="checkbox" id="fMilestones" ${filters.milestones ? "checked" : ""}/> milestones</label>
+            <label class="pill"><input type="checkbox" id="fGoals" ${filters.goals ? "checked" : ""}/> goals</label>
           </div>
+        </div>
+      </details>
 
-          <div class="row">
-            <button class="btn secondary" id="weeklyBtn">Weekly</button>
-            <button class="btn secondary" id="monthlyBtn">Monthly</button>
-            <button class="btn secondary" id="yearlyBtn">Yearly</button>
-          </div>
+      <!-- Compact toolbar attached to calendar -->
+      <div class="calToolbar">
+        <div class="calSeg" id="calSeg">
+          <button class="calSegBtn" data-view="week">Week</button>
+          <button class="calSegBtn" data-view="month">Month</button>
+          <button class="calSegBtn" data-view="year">Year</button>
+        </div>
+
+        <div class="calNav">
+          <button class="btn secondary small" id="prevBtn">Prev</button>
+          <button class="btn secondary small" id="todayBtn">Today</button>
+          <button class="btn secondary small" id="nextBtn">Next</button>
         </div>
       </div>
 
-      <div class="card big stack">
-        <div class="title2">Focus filter</div>
-        <div class="muted">Show everything, or focus on one goal / one habit.</div>
-
-        <div class="row" style="align-items:flex-end">
-          <div style="min-width:180px">
-            <div class="muted">Mode</div>
-            <select id="focusMode" class="input">
-              <option value="all">All</option>
-              <option value="goal">One goal</option>
-              <option value="habit">One habit</option>
-            </select>
-          </div>
-
-          <div id="focusGoalWrap" style="min-width:220px; display:none">
-            <div class="muted">Goal</div>
-            <select id="focusGoalId" class="input">
-              ${goalOptions || `<option value="">(no goals)</option>`}
-            </select>
-          </div>
-
-          <div id="focusHabitWrap" style="min-width:220px; display:none">
-            <div class="muted">Habit</div>
-            <select id="focusHabitId" class="input">
-              ${habitOptions || `<option value="">(no habits)</option>`}
-            </select>
-          </div>
-
-          <button class="btn secondary" id="clearFocusBtn">Clear</button>
-          <span class="pill" id="focusNamePill">${App.esc(focusLabel(db))}</span>
-        </div>
-      </div>
-
-      <div class="card big stack">
-        <div class="title2">Filters</div>
-        <div class="row">
-          <label class="pill"><input type="checkbox" id="fTasks" ${filters.tasks ? "checked" : ""}/> tasks</label>
-          <label class="pill"><input type="checkbox" id="fHabits" ${filters.habits ? "checked" : ""}/> habits</label>
-          <label class="pill"><input type="checkbox" id="fMilestones" ${filters.milestones ? "checked" : ""}/> milestones</label>
-          <label class="pill"><input type="checkbox" id="fGoals" ${filters.goals ? "checked" : ""}/> goals</label>
-        </div>
+      <div class="calMeta">
+        <span class="pill">Focus date <b id="focusLbl">${App.esc(focusDate)}</b></span>
+        <span class="pill">View <b id="viewLbl">${App.esc(view)}</b></span>
       </div>
 
       <div id="calBody"></div>
     </div>
   `;
+
+  // open/close state for details
+  const det = document.getElementById("calDetails");
+  det.open = !!yr.calendar.panelsOpen;
+  det.addEventListener("toggle", () => {
+    savePrefs({ panelsOpen: !!det.open });
+  });
+
+  // Add button now in header
+  document.getElementById("calAddBtn").onclick = () => {
+    const choice = prompt("Add: goal / habit / budget ?", "goal");
+    if (!choice) return;
+    const c = choice.toLowerCase().trim();
+    if (c.startsWith("g")) return App.navTo("#/goals");
+    if (c.startsWith("h")) return App.navTo("#/habits");
+    if (c.startsWith("b")) return App.navTo("#/budget");
+    App.navTo("#/goals");
+  };
+
+  function setSegActive(v) {
+    document.querySelectorAll(".calSegBtn").forEach(b => {
+      b.classList.toggle("active", b.getAttribute("data-view") === v);
+    });
+  }
 
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
@@ -559,18 +603,19 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const vNow = (yrNow2.calendar?.defaultView || "month");
     const isoNow = (yrNow2.calendar?.focusDate || today);
 
+    setSegActive(vNow);
+
     if (vNow === "month") el.innerHTML = renderMonth(isoNow);
     else if (vNow === "year") el.innerHTML = renderYear(isoNow);
     else el.innerHTML = renderWeek(isoNow);
 
-    // Swipe left/right: week/month/year
+    // Swipe
     attachSwipe(
       el,
       () => (App.getYearModel(dbLoad()).calendar?.defaultView || "month"),
       () => (App.getYearModel(dbLoad()).calendar?.focusDate || today),
       (dir, vX, isoX) => {
         const newISO = (dir === "next") ? navNext(vX, isoX) : navPrev(vX, isoX);
-
         const dbX = dbLoad();
         const yrX = App.getYearModel(dbX);
         const sel = yrX.calendar?.selectedDate || today;
@@ -584,7 +629,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
           const dim = daysInMonth(newISO);
           const d = Math.min(dayNum, dim);
           newSel = `${monthKey(newISO)}-${pad2(d)}`;
-        } else { // year
+        } else {
           newSel = `${String(newISO).slice(0,4)}-01-01`;
         }
 
@@ -593,17 +638,17 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       }
     );
 
-    // Habit toggles (agenda)
-    el.querySelectorAll("input[type='checkbox'][data-habit]").forEach(cb => {
-      cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
-    });
-
     // Agenda nav
     el.querySelectorAll("[data-nav]").forEach(btn => {
       btn.onclick = () => { location.hash = btn.getAttribute("data-nav"); };
     });
 
-    // Month: tap day => week
+    // Habit toggles
+    el.querySelectorAll("input[type='checkbox'][data-habit]").forEach(cb => {
+      cb.onchange = () => toggleHabitCheck(cb.getAttribute("data-habit"), cb.getAttribute("data-date"));
+    });
+
+    // Month tap day => week
     el.querySelectorAll("[data-day]").forEach(btn => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-day");
@@ -612,7 +657,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // Week: tap day in strip => select day (stay in week)
+    // Week tap day => select
     el.querySelectorAll(".wkDay[data-day]").forEach(btn => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-day");
@@ -621,12 +666,12 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       };
     });
 
-    // Year: tap month title => month view
+    // Year month title => month
     el.querySelectorAll("[data-month]").forEach(btn => {
       btn.onclick = () => rerender(btn.getAttribute("data-month"), "month");
     });
 
-    // Year: tap day => week view
+    // Year day => week
     el.querySelectorAll("[data-yday]").forEach(btn => {
       btn.onclick = () => {
         const d = btn.getAttribute("data-yday");
@@ -654,10 +699,10 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   bindFilter("fMilestones", "milestones");
   bindFilter("fGoals", "goals");
 
-  // View buttons
-  document.getElementById("weeklyBtn").onclick = () => rerender(yr.calendar.focusDate || today, "week");
-  document.getElementById("monthlyBtn").onclick = () => rerender(yr.calendar.focusDate || today, "month");
-  document.getElementById("yearlyBtn").onclick = () => rerender(yr.calendar.focusDate || today, "year");
+  // Segmented control
+  document.querySelectorAll(".calSegBtn").forEach(btn => {
+    btn.onclick = () => rerender(yr.calendar.focusDate || today, btn.getAttribute("data-view"));
+  });
 
   // Nav buttons
   document.getElementById("todayBtn").onclick = () => rerender(today, (yr.calendar.defaultView || "month"));
