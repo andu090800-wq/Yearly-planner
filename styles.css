@@ -1503,3 +1503,30 @@ textarea:focus{
   .iosSeg .segBtn{ flex:1; justify-content:center; }
   .dayHourRow{ grid-template-columns: 56px 1fr; }
 }
+/* ===== FINAL OVERRIDES for calendar.js (must be last) ===== */
+
+.iosSeg .segBtn{
+  -webkit-appearance:none;
+  appearance:none;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+}
+
+.iosSeg .segBtn.on{
+  background: rgba(255,255,255,.92) !important;
+  border-color: rgba(0,0,0,.18) !important;
+  box-shadow: var(--shadow2) !important;
+}
+
+.dayBtn{
+  -webkit-appearance:none;
+  appearance:none;
+  width:100%;
+  text-align:left;
+  cursor:pointer;
+  border: 1px solid var(--border) !important;
+  background: rgba(255,255,255,.92) !important;
+  border-radius:14px !important;
+  padding:10px 10px !important;
+}
+.dayBtn:active{ transform: scale(.99); opacity:.96; }
