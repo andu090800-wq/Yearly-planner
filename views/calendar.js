@@ -647,12 +647,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   // ---------- Rerender ----------
   function openDaily(iso) {
   const d = iso || today;
-  savePrefs({
-    defaultView: "day",
-    focusDate: d,
-    selectedDate: d
-  });
-  openDaily(d);
+
+  savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
+
+  // forțează re-render-ul global al aplicației (ăsta e motivul pt care rămâneai în Weekly)
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
 }
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
