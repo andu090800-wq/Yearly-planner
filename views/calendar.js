@@ -465,7 +465,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       const hasGoals = its.some((x) => x.kind === "goal");
 
       return `
-        <button class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}" data-mday="${App.esc(d)}">
+        <button type="button" class="calCell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""} ${isSel ? "sel" : ""} ${hasOverdue ? "bad" : ""}" data-mday="${App.esc(d)}">
           <div class="calCellTop">
             <span class="calCellNum">${App.esc(String(Number(d.slice(8, 10))))}</span>
           </div>
