@@ -1266,3 +1266,117 @@ textarea:focus{
   background: rgba(0,0,0,.55);
 }
 .yMiniCell.sel .yMiniDot{ background:#fff; }
+
+/* =========================
+   Calendar layout tweaks (hide top bar only via JS)
+   ========================= */
+
+.calPageHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 4px 4px 0 4px;
+}
+.calPageTitle{
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:.2px;
+}
+.calPageSub{
+  color: var(--muted);
+  font-size:13px;
+  margin-top:2px;
+  font-weight:800;
+}
+
+.calDetails{
+  border-radius: var(--r);
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.70);
+  box-shadow: var(--shadow2);
+  padding: 12px;
+}
+.calSummary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  font-weight:900;
+}
+.calDetails summary::-webkit-details-marker{ display:none; }
+.calSummaryHint{
+  font-weight:800;
+  color: var(--muted);
+  font-size:12px;
+}
+
+/* Compact toolbar attached to calendar */
+.calToolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding: 8px 8px;
+  border-radius: 18px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow2);
+}
+
+.calSeg{
+  display:inline-flex;
+  gap:6px;
+  padding:6px;
+  border-radius: 999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.80);
+}
+.calSegBtn{
+  border:1px solid transparent;
+  background: transparent;
+  padding:8px 12px;
+  border-radius: 999px;
+  font:inherit;
+  font-weight:900;
+  font-size:13px;
+  cursor:pointer;
+}
+.calSegBtn.active{
+  background:#111;
+  color:#fff;
+  border-color:#111;
+}
+
+.calNav{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+
+.calMeta{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+/* Make calendar card look integrated */
+.calCard{
+  border-radius: var(--r);
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.92);
+  box-shadow: var(--shadow);
+  padding:16px;
+}
+
+/* Slightly reduce month title spacing inside calCard */
+.calMonthHead{ margin-bottom: 8px; }
+
+/* On very small screens, keep toolbar usable */
+@media (max-width: 380px){
+  .calSegBtn{ padding:7px 10px; font-size:12px; }
+  .calToolbar{ gap:8px; }
+}
