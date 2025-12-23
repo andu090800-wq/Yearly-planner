@@ -798,3 +798,65 @@ textarea{ min-height:110px; resize: vertical; }
   background: rgba(255,255,255,.70);
 }
 .yMiniCell.sel .yMiniDot{ background: rgba(0,0,0,.65); }
+
+/* =========================================================
+   CALENDAR FIX PACK — (PUNE LA FINAL DE styles.css)
+   - repară year view pe iOS (nu mai apar zile ca pills/capsule)
+   - îmbunătățește headerul lunii în mini-calendare
+   ========================================================= */
+
+/* hard reset pt butoanele din year view (iOS pune stil de "pill") */
+.yMiniCell{
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  font: inherit !important;
+  color: inherit !important;
+  line-height: 1 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  text-align: center !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.yMiniCell:focus{ outline: none !important; }
+.yMiniCell::-moz-focus-inner{ border: 0 !important; }
+
+/* dacă ai vreo regulă globală de button care încă se bagă peste, o anulează aici */
+.yMiniCell *{
+  pointer-events: none;
+}
+
+/* titlul lunii - ca un label/pill (mai "iOS") */
+.yMiniTitle{
+  display:inline-flex !important;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  font: inherit;
+  font-weight: 900;
+  cursor:pointer;
+  margin: 0 0 10px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.yMiniTitle:active{ transform: scale(.99); opacity:.96; }
+
+/* grid spacing mai "tight" pe mobil, să nu pară uriaș */
+@media (max-width: 420px){
+  .yMiniGrid{ gap: 5px; }
+  .yMiniCell{ height: 24px; }
+  .yMiniNum{ width: 20px; height: 20px; font-size: 10px; }
+  .yMiniDow{ gap: 5px; font-size: 9px; }
+}
+
+/* optional: mini-card mai compact */
+.yMiniCard{
+  padding: 12px;
+}
