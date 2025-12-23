@@ -185,25 +185,47 @@ textarea{ min-height:92px; }
 }
 
 /* Bottom tabs (mobile) */
+/* Bottom tabs (mobile) */
 .tabs{
   display:flex;
   position:fixed;
   left:0; right:0; bottom:0;
   padding:10px 10px calc(10px + env(safe-area-inset-bottom));
   gap:8px;
-  justify-content:space-around;
   border-top:1px solid var(--border);
   background: rgba(255,255,255,.80);
   backdrop-filter: blur(16px);
+
+  /* ✅ scroll lateral */
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap:nowrap;
+  justify-content:flex-start;
+
+  /* (opțional) snap iOS */
+  scroll-snap-type: x mandatory;
 }
+
+/* ascunde scrollbar-ul */
+.tabs::-webkit-scrollbar{ display:none; }
+.tabs{ scrollbar-width:none; }
+
 .tab{
+  /* ✅ să nu se îngusteze */
+  flex:0 0 auto;
+  white-space:nowrap;
+
   text-decoration:none;
   color:inherit;
   font-size:12px;
-  padding:10px 10px;
+  padding:10px 12px;
   border-radius:14px;
   border:1px solid transparent;
   background: rgba(255,255,255,.70);
+
+  /* (opțional) snap iOS */
+  scroll-snap-align: start;
 }
 .tab.active{
   border-color: rgba(0,0,0,.18);
