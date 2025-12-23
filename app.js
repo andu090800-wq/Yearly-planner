@@ -157,184 +157,130 @@
   window.addEventListener("hashchange", render);
   render();
 
-  // ---------- Pull to refresh (iOS-like, under header) ----------
-  setupPullToRefresh();
+// =========================
+// Pull-to-Refresh (under header, iOS-like)
+// =========================
+(function setupPullToRefresh(){
+  const topBar = document.querySelector(".top");
+  const content = document.querySelector(".content");
 
-  function setupPullToRefresh() {
-    const header = document.querySelector(".top");
-    const content = document.querySelector(".content");
-    if (!header || !content) return;
+  // build indicator (under header)
+  const ptr = document.createElement("div");
+  ptr.id = "ptr";
+  ptr.innerHTML = `
+    <div class="ptrInner">
+      <div class="ptrSpinner"></div>
+      <div class="ptrText">Pull to refresh</div>
+    </div>
+  `;
+  document.body.appendChild(ptr);
 
-    // create UI once
-    let ptr = document.getElementById("ptr");
-    if (!ptr) {
-      ptr = document.createElement("div");
-      ptr.id = "ptr";
-      ptr.innerHTML = `
-        <div class="ptrInner">
-          <div class="ptrSpinner" aria-hidden="true"></div>
-          <div class="ptrText">Pull to refresh</div>
-        </div>
-      `;
-      // place under header, before content
-      header.insertAdjacentElement("afterend", ptr);
+  const txt = ptr.querySelector(".ptrText");
 
-      // Make sure it stays under header height (dynamic)
-      requestAnimationFrame(() => {
-        const h = header.getBoundingClientRect().height || 56;
-        ptr.style.top = `${Math.round(h)}px`;
-      });
-      window.addEventListener("resize", () => {
-        const h = header.getBoundingClientRect().height || 56;
-        ptr.style.top = `${Math.round(h)}px`;
-      });
-    }
+  // helper: set fixed top = header height
+  function syncPtrTop(){
+    const topH = (topBar?.offsetHeight || 0);
+    document.documentElement.style.setProperty("--ptrTop", topH + "px");
+  }
+  syncPtrTop();
+  window.addEventListener("resize", syncPtrTop);
 
-    const txt = ptr.querySelector(".ptrText");
+  // state
+  let startY = 0;
+  let pulling = false;
+  let armed = false;
+  let refreshing = false;
 
-    const THRESH = 72;        // px to trigger "release"
-    const MAX_PULL = 110;     // max visual pull
-    const RESIST = 0.55;      // resistance
+  const THRESH = 70; // px
 
-    let startY = 0;
-    let pulling = false;
-    let armed = false;
-    let refreshing = false;
+  function setY(y){
+    document.documentElement.style.setProperty("--ptrY", y + "px");
+    document.documentElement.style.setProperty("--ptrOpacity", y > 0 ? "1" : "0");
+  }
 
-    const haptic = (type = "light") => {
-      try {
-        if (navigator.vibrate) navigator.vibrate(type === "heavy" ? 18 : 10);
-      } catch {}
-    };
+  function haptic(){
+    // haptic where possible
+    try { navigator.vibrate?.(10); } catch {}
+  }
 
-    const setPull = (px) => {
-      ptr.style.setProperty("--ptrY", `${px}px`);
-      ptr.style.setProperty("--ptrOpacity", `${Math.min(1, px / 28)}`);
-    };
+  async function doRefresh(){
+    if (refreshing) return;
+    refreshing = true;
 
-    const reset = () => {
-      pulling = false;
-      armed = false;
-      ptr.classList.remove("ptrArmed", "ptrRefreshing", "ptrPulling");
-      setPull(0);
-      txt.textContent = "Pull to refresh";
-    };
+    ptr.classList.remove("ptrPulling","ptrArmed");
+    ptr.classList.add("ptrRefreshing");
+    txt.textContent = "Refreshing…";
 
-    const doRefresh = () => {
-      if (refreshing) return;
-      refreshing = true;
+    // keep it visible while refreshing
+    setY(52);
 
-      ptr.classList.add("ptrRefreshing");
-      txt.textContent = "Refreshing…";
-      haptic("heavy");
-
-      // NU atinge localStorage / DB. Doar reîncarcă UI + prinde update-uri PWA.
-      try { render(); } catch {}
-
-      setTimeout(() => location.reload(), 350);
-    };
-
-    const atTop = () => (document.scrollingElement?.scrollTop || 0) <= 0;
-
-    window.addEventListener("touchstart", (e) => {
-      if (refreshing) return;
-      if (!atTop()) return;
-
-      pulling = true;
-      armed = false;
-      startY = e.touches[0].clientY;
-      ptr.classList.add("ptrPulling");
-    }, { passive: true });
-
-    window.addEventListener("touchmove", (e) => {
-      if (!pulling || refreshing) return;
-
-      const y = e.touches[0].clientY;
-      let dy = (y - startY);
-
-      if (dy <= 0) {
-        reset();
-        return;
-      }
-
-      // prevent iOS rubber band while pulling
-      if (atTop()) e.preventDefault();
-
-      dy = Math.min(MAX_PULL, dy * RESIST);
-      setPull(dy);
-
-      const nowArmed = dy >= THRESH;
-      if (nowArmed && !armed) {
-        armed = true;
-        ptr.classList.add("ptrArmed");
-        txt.textContent = "Release to refresh";
-        haptic("light");
-      } else if (!nowArmed && armed) {
-        armed = false;
-        ptr.classList.remove("ptrArmed");
+    // refresh app shell / views
+    // (you can customize: render(), location.reload(), etc.)
+    try {
+      // safest: re-render current route
+      if (typeof render === "function") render();
+      else location.reload();
+    } finally {
+      // small delay so it feels real
+      setTimeout(() => {
+        ptr.classList.remove("ptrRefreshing");
+        setY(0);
         txt.textContent = "Pull to refresh";
-      }
-    }, { passive: false });
-
-    window.addEventListener("touchend", () => {
-      if (!pulling || refreshing) return;
-
-      ptr.classList.remove("ptrPulling");
-
-      if (armed) {
-        setPull(THRESH);
-        doRefresh();
-      } else {
-        reset();
-      }
-    }, { passive: true });
-
-    window.addEventListener("touchcancel", () => {
-      if (!pulling || refreshing) return;
-      reset();
-    }, { passive: true });
-
-    window.addEventListener("pageshow", () => {
-      refreshing = false;
-      reset();
-    });
+        refreshing = false;
+      }, 450);
+    }
   }
 
-  function render() {
-    const db = dbLoad();
-    const parts = App.parseHash();
-    if (!parts.length) return App.navTo("#/dashboard");
+  // touch handling (works in iOS PWA)
+  content.addEventListener("touchstart", (e) => {
+    if (refreshing) return;
+    if (window.scrollY > 0) return;     // only at top
+    if (content.scrollTop > 0) return;  // if content is scroll container
+    startY = e.touches[0].clientY;
+    pulling = true;
+    armed = false;
 
-    const route = parts[0];
-    setActiveNav(route);
+    syncPtrTop();
+    ptr.classList.add("ptrPulling");
+  }, { passive: true });
 
-    const ctx = { db, App, setPrimary };
-    const Views = window.Views || {};
+  content.addEventListener("touchmove", (e) => {
+    if (!pulling || refreshing) return;
+    if (window.scrollY > 0) return;
 
-    if (route === "dashboard") return Views.dashboard?.(ctx);
+    const y = e.touches[0].clientY;
+    let dy = y - startY;
+    if (dy < 0) dy = 0;
 
-    if (route === "year" && parts[1]) {
-      ctx.year = Number(parts[1]);
-      return Views.yearHome?.(ctx);
+    // resistance
+    dy = Math.min(120, dy * 0.75);
+
+    setY(dy);
+
+    if (dy >= THRESH && !armed){
+      armed = true;
+      ptr.classList.add("ptrArmed");
+      txt.textContent = "Release to refresh";
+      haptic();
+    } else if (dy < THRESH && armed){
+      armed = false;
+      ptr.classList.remove("ptrArmed");
+      txt.textContent = "Pull to refresh";
     }
 
-    if (route === "goals") return Views.goals?.(ctx);
-    if (route === "goal" && parts[1]) {
-      ctx.goalId = parts[1];
-      return Views.goalDetail?.(ctx);
+    // prevent safari rubber-band while we show our own PTR
+    if (dy > 0) e.preventDefault();
+  }, { passive: false });
+
+  content.addEventListener("touchend", () => {
+    if (!pulling || refreshing) return;
+    pulling = false;
+    ptr.classList.remove("ptrPulling");
+
+    if (armed){
+      doRefresh();
+    } else {
+      setY(0);
     }
-
-    if (route === "habits") return Views.habits?.(ctx);
-    if (route === "calendar") return Views.calendar?.(ctx);
-    if (route === "budget") return Views.budget?.(ctx);
-    if (route === "analytics") return Views.analytics?.(ctx);
-    if (route === "notifications") return Views.notifications?.(ctx);
-
-    if (route === "settings") return Views.settings?.(ctx);
-    if (route === "more") return Views.more?.(ctx);
-    if (route === "account") return Views.account?.(ctx);
-    if (route === "payment") return Views.payment?.(ctx);
-
-    App.navTo("#/dashboard");
-  }
+  }, { passive: true });
 })();
