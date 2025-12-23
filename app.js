@@ -1,4 +1,4 @@
-// app.js (FINAL): router + shared helpers + pull-to-refresh (under header)
+// app.js (GOALS categories-ready): router + shared helpers
 (() => {
   const view = document.getElementById("view");
   const crumb = document.getElementById("crumb");
@@ -25,42 +25,28 @@
   };
 
   App.esc = (s) => String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
 
   App.parseHash = () => {
     const h = (location.hash || "#/dashboard").replace(/^#/, "");
     return h.split("/").filter(Boolean);
   };
 
-  App.heroSVG = () => `
-    <svg class="heroArt" viewBox="0 0 220 140" aria-hidden="true">
-      <rect x="10" y="14" width="200" height="112" rx="22" fill="rgba(0,0,0,.06)"/>
-      <rect x="26" y="34" width="86" height="10" rx="6" fill="rgba(0,0,0,.18)"/>
-      <rect x="26" y="56" width="150" height="10" rx="6" fill="rgba(0,0,0,.10)"/>
-      <rect x="26" y="78" width="120" height="10" rx="6" fill="rgba(0,0,0,.10)"/>
-      <path d="M30 110 C56 84, 78 124, 108 92 C132 68, 156 84, 188 56"
-            fill="none" stroke="black" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="30" cy="110" r="6" fill="black"/>
-      <circle cx="108" cy="92" r="6" fill="black"/>
-      <circle cx="188" cy="56" r="6" fill="black"/>
-    </svg>`;
-
-  // ---------- Current year helpers (FIXED) ----------
+  // ---------- Current year helpers ----------
   App.getCurrentYear = (db) => {
     const list = Array.isArray(db?.yearsOrder) ? db.yearsOrder : [];
     let cy = db?.settings?.currentYear;
 
     if (cy == null) {
       if (!list.length) return null;
-
       cy = Number(list[list.length - 1]);
       db.settings = db.settings || {};
       db.settings.currentYear = cy;
-      dbSave(db); // persist
+      dbSave(db);
     }
 
     const y = Number(cy);
@@ -81,20 +67,8 @@
   }
 
   // ---------- Active nav highlight ----------
-  // Map child routes to the "main tab" you want highlighted.
   function mapToRootTab(route) {
     if (route === "goal") return "goals";
-
-    // Tot ce e "secondary" intră sub More (inclusiv budget/analytics dacă vrei)
-    if (
-      route === "account" ||
-      route === "settings" ||
-      route === "payment" ||
-      route === "notifications" ||
-      route === "budget" ||        // ✅
-      route === "analytics"        // ✅
-    ) return "more";
-
     return route;
   }
 
@@ -157,130 +131,44 @@
   window.addEventListener("hashchange", render);
   render();
 
-// =========================
-// Pull-to-Refresh (under header, iOS-like)
-// =========================
-(function setupPullToRefresh(){
-  const topBar = document.querySelector(".top");
-  const content = document.querySelector(".content");
+  function render() {
+    const db = dbLoad();
+    const parts = App.parseHash();
+    if (!parts.length) return App.navTo("#/dashboard");
 
-  // build indicator (under header)
-  const ptr = document.createElement("div");
-  ptr.id = "ptr";
-  ptr.innerHTML = `
-    <div class="ptrInner">
-      <div class="ptrSpinner"></div>
-      <div class="ptrText">Pull to refresh</div>
-    </div>
-  `;
-  document.body.appendChild(ptr);
+    const route = parts[0];
+    setActiveNav(route);
 
-  const txt = ptr.querySelector(".ptrText");
+    const ctx = { db, App, setPrimary };
+    const Views = window.Views || {};
 
-  // helper: set fixed top = header height
-  function syncPtrTop(){
-    const topH = (topBar?.offsetHeight || 0);
-    document.documentElement.style.setProperty("--ptrTop", topH + "px");
-  }
-  syncPtrTop();
-  window.addEventListener("resize", syncPtrTop);
+    if (route === "dashboard") return Views.dashboard?.(ctx);
 
-  // state
-  let startY = 0;
-  let pulling = false;
-  let armed = false;
-  let refreshing = false;
-
-  const THRESH = 70; // px
-
-  function setY(y){
-    document.documentElement.style.setProperty("--ptrY", y + "px");
-    document.documentElement.style.setProperty("--ptrOpacity", y > 0 ? "1" : "0");
-  }
-
-  function haptic(){
-    // haptic where possible
-    try { navigator.vibrate?.(10); } catch {}
-  }
-
-  async function doRefresh(){
-    if (refreshing) return;
-    refreshing = true;
-
-    ptr.classList.remove("ptrPulling","ptrArmed");
-    ptr.classList.add("ptrRefreshing");
-    txt.textContent = "Refreshing…";
-
-    // keep it visible while refreshing
-    setY(52);
-
-    // refresh app shell / views
-    // (you can customize: render(), location.reload(), etc.)
-    try {
-      // safest: re-render current route
-      if (typeof render === "function") render();
-      else location.reload();
-    } finally {
-      // small delay so it feels real
-      setTimeout(() => {
-        ptr.classList.remove("ptrRefreshing");
-        setY(0);
-        txt.textContent = "Pull to refresh";
-        refreshing = false;
-      }, 450);
-    }
-  }
-
-  // touch handling (works in iOS PWA)
-  content.addEventListener("touchstart", (e) => {
-    if (refreshing) return;
-    if (window.scrollY > 0) return;     // only at top
-    if (content.scrollTop > 0) return;  // if content is scroll container
-    startY = e.touches[0].clientY;
-    pulling = true;
-    armed = false;
-
-    syncPtrTop();
-    ptr.classList.add("ptrPulling");
-  }, { passive: true });
-
-  content.addEventListener("touchmove", (e) => {
-    if (!pulling || refreshing) return;
-    if (window.scrollY > 0) return;
-
-    const y = e.touches[0].clientY;
-    let dy = y - startY;
-    if (dy < 0) dy = 0;
-
-    // resistance
-    dy = Math.min(120, dy * 0.75);
-
-    setY(dy);
-
-    if (dy >= THRESH && !armed){
-      armed = true;
-      ptr.classList.add("ptrArmed");
-      txt.textContent = "Release to refresh";
-      haptic();
-    } else if (dy < THRESH && armed){
-      armed = false;
-      ptr.classList.remove("ptrArmed");
-      txt.textContent = "Pull to refresh";
+    if (route === "year" && parts[1]) {
+      ctx.year = Number(parts[1]);
+      return Views.yearHome?.(ctx);
     }
 
-    // prevent safari rubber-band while we show our own PTR
-    if (dy > 0) e.preventDefault();
-  }, { passive: false });
+    if (route === "calendar") return Views.calendar?.(ctx);
 
-  content.addEventListener("touchend", () => {
-    if (!pulling || refreshing) return;
-    pulling = false;
-    ptr.classList.remove("ptrPulling");
-
-    if (armed){
-      doRefresh();
-    } else {
-      setY(0);
+    if (route === "goals") return Views.goals?.(ctx);
+    if (route === "goal" && parts[1]) {
+      ctx.goalId = parts[1];
+      return Views.goalDetail?.(ctx);
     }
-  }, { passive: true });
+
+    if (route === "habits") return Views.habits?.(ctx);
+    if (route === "notes") return Views.notes?.(ctx);
+
+    if (route === "analytics") return Views.analytics?.(ctx);
+    if (route === "budget") return Views.budget?.(ctx);
+
+    if (route === "notifications") return Views.notifications?.(ctx);
+    if (route === "settings") return Views.settings?.(ctx);
+    if (route === "more") return Views.more?.(ctx);
+    if (route === "account") return Views.account?.(ctx);
+    if (route === "payment") return Views.payment?.(ctx);
+
+    App.navTo("#/dashboard");
+  }
 })();
