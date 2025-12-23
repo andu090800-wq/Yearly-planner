@@ -184,8 +184,7 @@ textarea{ min-height:92px; }
   letter-spacing:.2px;
 }
 
-/* Bottom tabs (mobile) */
-/* Bottom tabs (mobile) */
+/* Bottom tabs (mobile) - scroll lateral */
 .tabs{
   display:flex;
   position:fixed;
@@ -202,19 +201,23 @@ textarea{ min-height:92px; }
   -webkit-overflow-scrolling: touch;
   flex-wrap:nowrap;
   justify-content:flex-start;
+  touch-action: pan-x;
 
-  /* (opțional) snap iOS */
+  /* optional: snap iOS */
   scroll-snap-type: x mandatory;
 }
 
-/* ascunde scrollbar-ul */
+/* ascunde scrollbar */
 .tabs::-webkit-scrollbar{ display:none; }
 .tabs{ scrollbar-width:none; }
 
 .tab{
-  /* ✅ să nu se îngusteze */
-  flex:0 0 auto;
-  white-space:nowrap;
+  flex: 0 0 auto;
+  white-space: nowrap;
+
+  /* ✅ forțează overflow => scroll */
+  min-width: 92px;
+  text-align: center;
 
   text-decoration:none;
   color:inherit;
@@ -224,15 +227,15 @@ textarea{ min-height:92px; }
   border:1px solid transparent;
   background: rgba(255,255,255,.70);
 
-  /* (opțional) snap iOS */
+  /* optional: snap iOS */
   scroll-snap-align: start;
 }
+
 .tab.active{
   border-color: rgba(0,0,0,.18);
   background: rgba(255,255,255,.92);
   font-weight:900;
 }
-
 /* Desktop hides bottom tabs, mobile hides sidebar */
 @media (min-width: 980px){
   .tabs{ display:none; }
