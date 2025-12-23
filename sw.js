@@ -1,14 +1,18 @@
-// sw.js
-const CACHE = "plans-glass-v12";
+// sw.js (FINAL - robust, no stale views)
+const CACHE = "plans-glass-v13";
 
 // ✅ include tot ce folosește app-ul (altfel rămâi cu views vechi în cache)
 const ASSETS = [
-  ".", "index.html", "styles.css", "manifest.webmanifest",
-  "sw.js",              // ✅ adaugă asta
+  "./",
+  "index.html",
+  "styles.css",
+  "manifest.webmanifest",
 
+  // core
   "db.js",
   "app.js",
 
+  // views
   "views/dashboard.js",
   "views/yearHome.js",
   "views/goals.js",
@@ -26,9 +30,10 @@ const ASSETS = [
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS))
-  );
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await c.addAll(ASSETS);
+  })());
 });
 
 self.addEventListener("activate", (e) => {
@@ -40,7 +45,7 @@ self.addEventListener("activate", (e) => {
   })());
 });
 
-// Helper: network-first pentru HTML (ca să primești mereu versiunea nouă)
+// ----- Strategies -----
 async function networkFirst(req) {
   try {
     const fresh = await fetch(req);
@@ -50,11 +55,10 @@ async function networkFirst(req) {
   } catch {
     const cached = await caches.match(req);
     if (cached) return cached;
-    throw new Error("Offline and no cache");
+    return new Response("Offline", { status: 503, statusText: "Offline" });
   }
 }
 
-// Helper: cache-first pentru assets (rapid)
 async function cacheFirst(req) {
   const cached = await caches.match(req);
   if (cached) return cached;
@@ -76,12 +80,32 @@ self.addEventListener("fetch", (e) => {
   // doar same-origin
   if (url.origin !== self.location.origin) return;
 
-  // ✅ HTML: network-first
-  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
+  const accept = req.headers.get("accept") || "";
+
+  // ✅ HTML navigations: network-first (primești mereu ultima versiune)
+  if (req.mode === "navigate" || accept.includes("text/html")) {
     e.respondWith(networkFirst(req));
     return;
   }
 
-  // ✅ restul: cache-first
-  e.respondWith(cacheFirst(req));
+  // ✅ Static assets: cache-first (rapid, offline-friendly)
+  const isStatic =
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".webmanifest") ||
+    url.pathname.endsWith(".png") ||
+    url.pathname.endsWith(".jpg") ||
+    url.pathname.endsWith(".jpeg") ||
+    url.pathname.endsWith(".svg") ||
+    url.pathname.endsWith(".ico") ||
+    url.pathname.endsWith(".woff") ||
+    url.pathname.endsWith(".woff2");
+
+  if (isStatic) {
+    e.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // ✅ Anything else (json, etc): network-first (evită “înghețarea”)
+  e.respondWith(networkFirst(req));
 });
