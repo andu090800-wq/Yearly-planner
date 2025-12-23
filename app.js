@@ -1,4 +1,4 @@
-// app.js (FINAL): router + shared helpers. All screens live in /views/*.js
+// app.js (FINAL): router + shared helpers + pull-to-refresh (under header)
 (() => {
   const view = document.getElementById("view");
   const crumb = document.getElementById("crumb");
@@ -25,11 +25,11 @@
   };
 
   App.esc = (s) => String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#39;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 
   App.parseHash = () => {
     const h = (location.hash || "#/dashboard").replace(/^#/, "");
@@ -83,20 +83,20 @@
   // ---------- Active nav highlight ----------
   // Map child routes to the "main tab" you want highlighted.
   function mapToRootTab(route) {
-  if (route === "goal") return "goals";
+    if (route === "goal") return "goals";
 
-  // tot ce e "secondary" intră sub More
-  if (
-    route === "account" ||
-    route === "settings" ||
-    route === "payment" ||
-    route === "notifications" ||
-    route === "budget" ||        // ✅ ADD THIS
-    route === "analytics"        // (opțional, dar recomand)
-  ) return "more";
+    // Tot ce e "secondary" intră sub More (inclusiv budget/analytics dacă vrei)
+    if (
+      route === "account" ||
+      route === "settings" ||
+      route === "payment" ||
+      route === "notifications" ||
+      route === "budget" ||        // ✅
+      route === "analytics"        // ✅
+    ) return "more";
 
-  return route;
-}
+    return route;
+  }
 
   function setActiveNav(route) {
     const root = mapToRootTab(route);
@@ -156,6 +156,149 @@
   // ---------- Router ----------
   window.addEventListener("hashchange", render);
   render();
+
+  // ---------- Pull to refresh (iOS-like, under header) ----------
+  setupPullToRefresh();
+
+  function setupPullToRefresh() {
+    const header = document.querySelector(".top");
+    const content = document.querySelector(".content");
+    if (!header || !content) return;
+
+    // create UI once
+    let ptr = document.getElementById("ptr");
+    if (!ptr) {
+      ptr = document.createElement("div");
+      ptr.id = "ptr";
+      ptr.innerHTML = `
+        <div class="ptrInner">
+          <div class="ptrSpinner" aria-hidden="true"></div>
+          <div class="ptrText">Pull to refresh</div>
+        </div>
+      `;
+      // place under header, before content
+      header.insertAdjacentElement("afterend", ptr);
+
+      // Make sure it stays under header height (dynamic)
+      requestAnimationFrame(() => {
+        const h = header.getBoundingClientRect().height || 56;
+        ptr.style.top = `${Math.round(h)}px`;
+      });
+      window.addEventListener("resize", () => {
+        const h = header.getBoundingClientRect().height || 56;
+        ptr.style.top = `${Math.round(h)}px`;
+      });
+    }
+
+    const txt = ptr.querySelector(".ptrText");
+
+    const THRESH = 72;        // px to trigger "release"
+    const MAX_PULL = 110;     // max visual pull
+    const RESIST = 0.55;      // resistance
+
+    let startY = 0;
+    let pulling = false;
+    let armed = false;
+    let refreshing = false;
+
+    const haptic = (type = "light") => {
+      try {
+        if (navigator.vibrate) navigator.vibrate(type === "heavy" ? 18 : 10);
+      } catch {}
+    };
+
+    const setPull = (px) => {
+      ptr.style.setProperty("--ptrY", `${px}px`);
+      ptr.style.setProperty("--ptrOpacity", `${Math.min(1, px / 28)}`);
+    };
+
+    const reset = () => {
+      pulling = false;
+      armed = false;
+      ptr.classList.remove("ptrArmed", "ptrRefreshing", "ptrPulling");
+      setPull(0);
+      txt.textContent = "Pull to refresh";
+    };
+
+    const doRefresh = () => {
+      if (refreshing) return;
+      refreshing = true;
+
+      ptr.classList.add("ptrRefreshing");
+      txt.textContent = "Refreshing…";
+      haptic("heavy");
+
+      // NU atinge localStorage / DB. Doar reîncarcă UI + prinde update-uri PWA.
+      try { render(); } catch {}
+
+      setTimeout(() => location.reload(), 350);
+    };
+
+    const atTop = () => (document.scrollingElement?.scrollTop || 0) <= 0;
+
+    window.addEventListener("touchstart", (e) => {
+      if (refreshing) return;
+      if (!atTop()) return;
+
+      pulling = true;
+      armed = false;
+      startY = e.touches[0].clientY;
+      ptr.classList.add("ptrPulling");
+    }, { passive: true });
+
+    window.addEventListener("touchmove", (e) => {
+      if (!pulling || refreshing) return;
+
+      const y = e.touches[0].clientY;
+      let dy = (y - startY);
+
+      if (dy <= 0) {
+        reset();
+        return;
+      }
+
+      // prevent iOS rubber band while pulling
+      if (atTop()) e.preventDefault();
+
+      dy = Math.min(MAX_PULL, dy * RESIST);
+      setPull(dy);
+
+      const nowArmed = dy >= THRESH;
+      if (nowArmed && !armed) {
+        armed = true;
+        ptr.classList.add("ptrArmed");
+        txt.textContent = "Release to refresh";
+        haptic("light");
+      } else if (!nowArmed && armed) {
+        armed = false;
+        ptr.classList.remove("ptrArmed");
+        txt.textContent = "Pull to refresh";
+      }
+    }, { passive: false });
+
+    window.addEventListener("touchend", () => {
+      if (!pulling || refreshing) return;
+
+      ptr.classList.remove("ptrPulling");
+
+      if (armed) {
+        setPull(THRESH);
+        doRefresh();
+      } else {
+        reset();
+      }
+    }, { passive: true });
+
+    window.addEventListener("touchcancel", () => {
+      if (!pulling || refreshing) return;
+      reset();
+    }, { passive: true });
+
+    window.addEventListener("pageshow", () => {
+      refreshing = false;
+      reset();
+    });
+  }
 
   function render() {
     const db = dbLoad();
