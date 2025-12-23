@@ -1,4 +1,4 @@
-// views/goals.js
+// views/goals.js — Categories-first Goals (FINAL)
 window.Views = window.Views || {};
 window.Goals = window.Goals || {};
 
@@ -14,13 +14,14 @@ window.Goals = window.Goals || {};
   const fmtPct = (x) => `${Math.round(x * 100)}%`;
 
   function ensureYearOrRedirect(App) {
-    const yr = App.getYearModel(dbLoad());
+    const db = dbLoad();
+    const yr = App.getYearModel(db);
     if (!yr) {
       App.toast("Add your first year in Dashboard");
       App.navTo("#/dashboard");
       return null;
     }
-    return yr;
+    return { db, yr, year: App.getCurrentYear(db) };
   }
 
   function ensureGoalCategories(yr) {
@@ -28,9 +29,8 @@ window.Goals = window.Goals || {};
     yr.categories.goals = Array.isArray(yr.categories.goals) ? yr.categories.goals : [];
   }
 
-  function catLabel(yr, catId) {
-    const c = (yr.categories.goals || []).find((x) => x.id === catId);
-    return c ? c.name : "Uncategorized";
+  function catById(yr, catId) {
+    return (yr.categories.goals || []).find((c) => c.id === catId) || null;
   }
 
   function collectAllTasks(goal) {
@@ -62,24 +62,20 @@ window.Goals = window.Goals || {};
     return { mode: "none", ratio: 0, label: "0%" };
   }
 
-  function taskOverdue(t, today) {
-    const dd = (t.dueDate || "").trim();
-    return !!dd && dd < today && !t.done;
-  }
-
   function countOverdueTasks(goal, today) {
     let n = 0;
-    for (const t of collectAllTasks(goal)) if (taskOverdue(t, today)) n++;
+    for (const t of collectAllTasks(goal)) {
+      const dd = (t.dueDate || "").trim();
+      if (dd && dd < today && !t.done) n++;
+    }
     return n;
   }
 
   function isGoalDone(goal) {
-    // numeric done
     const target = safeNum(goal.targetValue);
     const cur = safeNum(goal.currentValue);
     if (target != null && target > 0 && cur != null) return cur >= target;
 
-    // tasks done
     const tasks = collectAllTasks(goal);
     return tasks.length > 0 && tasks.every((t) => !!t.done);
   }
@@ -91,7 +87,6 @@ window.Goals = window.Goals || {};
     const end = (goal.endDate || "").trim();
     if (end && end < today) return { key: "overdue", label: "Overdue" };
 
-    // at risk: has overdue tasks OR deadline within 7d and low progress
     if (countOverdueTasks(goal, today) > 0) return { key: "risk", label: "At risk" };
 
     if (end) {
@@ -105,7 +100,7 @@ window.Goals = window.Goals || {};
     return { key: "track", label: "On track" };
   }
 
-  // ---------- shared modal (single impl) ----------
+  // ---------- shared modal ----------
   function openModal(App, title, bodyHTML, actionsHTML) {
     const overlay = document.createElement("div");
     overlay.style.position = "fixed";
@@ -143,33 +138,90 @@ window.Goals = window.Goals || {};
     return { modal, close };
   }
 
-  // ---------- editor ----------
-  function openGoalEditor(goalId = null) {
+  // ---------- Category editor ----------
+  function openCategoryEditor(existingId = null) {
     const db = dbLoad();
     const yr = window.App.getYearModel(db);
     if (!yr) return;
+
+    ensureGoalCategories(yr);
+    const editing = existingId ? (yr.categories.goals || []).find((c) => c.id === existingId) : null;
+
+    const body = `
+      <div class="grid">
+        <div style="grid-column:1/-1">
+          <div class="muted">Category name</div>
+          <input id="catName" class="input" value="${window.App.esc(editing?.name || "")}" placeholder="e.g. Health, Career..." />
+        </div>
+      </div>
+    `;
+
+    const actions = `
+      ${editing ? `<button id="delCatBtn" class="btn danger">Delete</button>` : ``}
+      <button id="saveCatBtn" class="btn">${editing ? "Save" : "Create"}</button>
+    `;
+
+    const { modal, close } = openModal(window.App, editing ? "Edit Category" : "Create Category", body, actions);
+
+    modal.querySelector("#saveCatBtn").onclick = () => {
+      const name = modal.querySelector("#catName").value.trim();
+      if (!name) return alert("Category name required.");
+
+      if (editing) editing.name = name;
+      else yr.categories.goals.push({ id: dbUid(), name, archived: false });
+
+      dbSave(db);
+      close();
+      window.App.toast(editing ? "Saved" : "Created");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    };
+
+    if (editing) {
+      modal.querySelector("#delCatBtn").onclick = () => {
+        const hasGoals = (yr.goals || []).some((g) => g.categoryId === editing.id);
+        if (hasGoals) return alert("This category has goals. Move/delete those goals first.");
+        if (!confirm("Delete this category?")) return;
+
+        yr.categories.goals = (yr.categories.goals || []).filter((c) => c.id !== editing.id);
+        dbSave(db);
+        close();
+        window.App.toast("Deleted");
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      };
+    }
+  }
+
+  // ---------- Goal editor (category REQUIRED) ----------
+  function openGoalEditor(goalId = null, forcedCategoryId = "") {
+    const db = dbLoad();
+    const yr = window.App.getYearModel(db);
+    if (!yr) return;
+
     ensureGoalCategories(yr);
 
     yr.goals = Array.isArray(yr.goals) ? yr.goals : [];
     const editing = goalId ? yr.goals.find((g) => g.id === goalId) : null;
 
-    const cats = yr.categories.goals || [];
+    const cats = (yr.categories.goals || []).filter((c) => !c.archived);
+    if (!cats.length) {
+      window.App.toast("Create a category first");
+      return openCategoryEditor(null);
+    }
+
     const catOptions = [
-      `<option value="">Uncategorized</option>`,
-      ...cats.filter((c) => !c.archived).map(
-        (c) => `<option value="${window.App.esc(c.id)}">${window.App.esc(c.name)}</option>`
-      )
+      `<option value="">Select category…</option>`,
+      ...cats.map((c) => `<option value="${window.App.esc(c.id)}">${window.App.esc(c.name)}</option>`)
     ].join("");
 
     const body = `
       <div class="grid">
-        <div>
+        <div style="grid-column:1/-1">
           <div class="muted">Title</div>
-          <input id="gTitle" class="input" value="${window.App.esc(editing?.title || "")}" />
+          <input id="gTitle" class="input" value="${window.App.esc(editing?.title || "")}" placeholder="e.g. Run 10K" />
         </div>
 
-        <div>
-          <div class="muted">Category</div>
+        <div style="grid-column:1/-1">
+          <div class="muted">Category (required)</div>
           <div class="row">
             <select id="gCat" class="input">${catOptions}</select>
             <button id="addCatBtn" class="btn secondary small">+ Category</button>
@@ -187,15 +239,11 @@ window.Goals = window.Goals || {};
 
         <div>
           <div class="muted">Target (optional)</div>
-          <input id="gTarget" type="number" class="input" value="${
-            editing?.targetValue == null || editing?.targetValue === "" ? "" : window.App.esc(editing.targetValue)
-          }" />
+          <input id="gTarget" type="number" class="input" value="${editing?.targetValue === "" || editing?.targetValue == null ? "" : window.App.esc(editing.targetValue)}" />
         </div>
         <div>
           <div class="muted">Current (optional)</div>
-          <input id="gCurrent" type="number" class="input" value="${
-            editing?.currentValue == null || editing?.currentValue === "" ? "" : window.App.esc(editing.currentValue)
-          }" />
+          <input id="gCurrent" type="number" class="input" value="${editing?.currentValue === "" || editing?.currentValue == null ? "" : window.App.esc(editing.currentValue)}" />
         </div>
 
         <div>
@@ -218,7 +266,7 @@ window.Goals = window.Goals || {};
     const { modal, close } = openModal(window.App, editing ? "Edit Goal" : "Create Goal", body, actions);
 
     const gCat = modal.querySelector("#gCat");
-    gCat.value = editing?.categoryId || "";
+    gCat.value = (forcedCategoryId || editing?.categoryId || "");
 
     modal.querySelector("#addCatBtn").onclick = () => {
       const name = prompt("New goal category name:");
@@ -227,12 +275,15 @@ window.Goals = window.Goals || {};
       dbSave(db);
       window.App.toast("Category added");
       close();
-      openGoalEditor(goalId);
+      openGoalEditor(goalId, forcedCategoryId);
     };
 
     modal.querySelector("#saveGoalBtn").onclick = () => {
       const title = modal.querySelector("#gTitle").value.trim();
       if (!title) return alert("Title required.");
+
+      const categoryId = (gCat.value || "").trim();
+      if (!categoryId) return alert("Category is required.");
 
       const startDate = modal.querySelector("#gStart").value || "";
       const endDate = modal.querySelector("#gEnd").value || "";
@@ -247,7 +298,7 @@ window.Goals = window.Goals || {};
 
       const payload = {
         title,
-        categoryId: gCat.value || "",
+        categoryId,
         startDate,
         endDate,
         targetValue,
@@ -261,23 +312,21 @@ window.Goals = window.Goals || {};
         editing.linkedHabitIds = Array.isArray(editing.linkedHabitIds) ? editing.linkedHabitIds : [];
         Object.assign(editing, payload);
       } else {
-        yr.goals.push({
-          id: dbUid(),
-          ...payload,
-          milestones: [],
-          linkedHabitIds: []
-        });
+        yr.goals.push({ id: dbUid(), ...payload, milestones: [], linkedHabitIds: [] });
       }
 
       dbSave(db);
       close();
       window.App.toast(editing ? "Saved" : "Created");
+
+      window.App.navTo(`#/goals/${categoryId}`);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     };
 
     if (editing) {
       modal.querySelector("#deleteGoalBtn").onclick = () => {
         if (!confirm("Delete this goal and all its milestones/tasks?")) return;
+
         yr.goals = (yr.goals || []).filter((g) => g.id !== editing.id);
 
         // cleanup reverse links in habits
@@ -290,71 +339,155 @@ window.Goals = window.Goals || {};
         dbSave(db);
         close();
         window.App.toast("Deleted");
-        if (window.App.parseHash()[0] === "goal") window.App.navTo("#/goals");
+        window.App.navTo(editing.categoryId ? `#/goals/${editing.categoryId}` : "#/goals");
         window.dispatchEvent(new HashChangeEvent("hashchange"));
       };
     }
   }
 
-  // export helpers
+  // exports
   G.openGoalEditor = openGoalEditor;
   G.calcGoalProgress = calcGoalProgress;
   G.goalStatus = goalStatus;
 
-  // ---------- view ----------
+  // ---------- View ----------
   window.Views.goals = ({ db, App, setPrimary }) => {
-    const yr = ensureYearOrRedirect(App);
-    if (!yr) return;
+    const pack = ensureYearOrRedirect(App);
+    if (!pack) return;
 
-    const year = App.getCurrentYear(dbLoad());
+    const { yr, year } = pack;
     ensureGoalCategories(yr);
 
-    App.setCrumb(`Goals • ${year}`);
-    setPrimary("+ Add Goal", () => openGoalEditor(null));
-
     yr.goals = Array.isArray(yr.goals) ? yr.goals : [];
-    const goals = yr.goals.slice();
+    yr.habits = Array.isArray(yr.habits) ? yr.habits : [];
 
-    // normalize
-    for (const g of goals) {
-      g.milestones = Array.isArray(g.milestones) ? g.milestones : [];
-      g.linkedHabitIds = Array.isArray(g.linkedHabitIds) ? g.linkedHabitIds : [];
+    const parts = App.parseHash(); // ["goals", "<catId?>"]
+    const catId = parts[1] ? String(parts[1]) : "";
+
+    const cats = (yr.categories.goals || []).filter((c) => !c.archived);
+
+    // MODE 1: categories tiles
+    if (!catId) {
+      App.setCrumb(`Goals • ${year}`);
+      setPrimary("+ Category", () => openCategoryEditor(null));
+
+      function tile(c) {
+        const goalsIn = (yr.goals || []).filter((g) => g.categoryId === c.id);
+
+        const hidSet = new Set();
+        for (const g of goalsIn) {
+          const ids = Array.isArray(g.linkedHabitIds) ? g.linkedHabitIds : [];
+          ids.forEach((id) => hidSet.add(String(id)));
+        }
+
+        const overdue = goalsIn.filter((g) => goalStatus(g).key === "overdue").length;
+        const risk = goalsIn.filter((g) => goalStatus(g).key === "risk").length;
+
+        return `
+          <div class="card cardTap stack" style="padding:14px; cursor:pointer" data-open-cat="${App.esc(c.id)}">
+            <div style="font-weight:900; font-size:18px">${App.esc(c.name)}</div>
+            <div class="muted" style="margin-top:4px">Goals: <b>${goalsIn.length}</b> • Habits: <b>${hidSet.size}</b></div>
+            <div class="row" style="margin-top:10px">
+              <span class="pill">Overdue <b>${overdue}</b></span>
+              <span class="pill">At risk <b>${risk}</b></span>
+            </div>
+            <div class="row" style="margin-top:10px; justify-content:space-between">
+              <button class="btn small" data-enter-cat="${App.esc(c.id)}">Open</button>
+              <button class="btn small secondary" data-edit-cat="${App.esc(c.id)}">Edit</button>
+            </div>
+          </div>
+        `;
+      }
+
+      App.viewEl.innerHTML = `
+        <div class="stack">
+          <div class="card big hero">
+            <div class="heroGlow"></div>
+            <div>
+              <div class="kpi">Goal categories</div>
+              <div class="muted">Year: <b>${App.esc(String(year))}</b></div>
+              <div class="row" style="margin-top:10px">
+                <button class="btn" id="addCatTopBtn">+ New category</button>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <span class="pill">Categories <b>${cats.length}</b></span>
+                <span class="pill">Goals <b>${(yr.goals || []).length}</b></span>
+              </div>
+            </div>
+            ${App.heroSVG()}
+          </div>
+
+          <div class="gridYears">
+            ${
+              cats.length
+                ? cats.map(tile).join("")
+                : `
+                  <div class="card big stack" style="grid-column:1/-1">
+                    <div class="kpi" style="font-size:20px">No categories yet</div>
+                    <div class="muted">Create a category to start adding goals.</div>
+                    <div class="row" style="margin-top:10px">
+                      <button class="btn" id="emptyAddCatBtn">+ Add category</button>
+                    </div>
+                  </div>
+                `
+            }
+          </div>
+        </div>
+      `;
+
+      const addCat = () => openCategoryEditor(null);
+      document.getElementById("addCatTopBtn")?.addEventListener("click", addCat);
+      document.getElementById("emptyAddCatBtn")?.addEventListener("click", addCat);
+
+      App.viewEl.querySelectorAll("[data-open-cat],[data-enter-cat]").forEach((el) => {
+        el.onclick = () => App.navTo(`#/goals/${el.getAttribute("data-open-cat") || el.getAttribute("data-enter-cat")}`);
+      });
+      App.viewEl.querySelectorAll("[data-edit-cat]").forEach((el) => {
+        el.onclick = () => openCategoryEditor(el.getAttribute("data-edit-cat"));
+      });
+      return;
     }
 
-    const activeCats = (yr.categories.goals || []).filter((c) => !c.archived);
-    const catOptions = [`<option value="">All categories</option>`]
-      .concat(activeCats.map((c) => `<option value="${App.esc(c.id)}">${App.esc(c.name)}</option>`))
-      .join("");
+    // MODE 2: goals list inside category
+    const cat = catById(yr, catId);
+    if (!cat) {
+      App.toast("Category not found");
+      App.navTo("#/goals");
+      return;
+    }
 
+    App.setCrumb(`${cat.name} • ${year}`);
+    setPrimary("+ Goal", () => openGoalEditor(null, catId));
+
+    const goalsInCat = (yr.goals || []).filter((g) => g.categoryId === catId);
     const today = todayISO();
-    const totalOverdue = goals.filter((g) => goalStatus(g).key === "overdue").length;
 
     function goalCard(g) {
+      g.milestones = Array.isArray(g.milestones) ? g.milestones : [];
+      g.linkedHabitIds = Array.isArray(g.linkedHabitIds) ? g.linkedHabitIds : [];
+
       const prog = calcGoalProgress(g);
       const st = goalStatus(g);
       const overdueTasks = countOverdueTasks(g, today);
-      const risk = st.key === "overdue" || st.key === "risk";
+      const risky = st.key === "overdue" || st.key === "risk";
 
       return `
-        <div class="card glass2 stack" style="padding:14px">
+        <div class="card cardTap stack" style="padding:14px">
           <div class="row" style="justify-content:space-between">
             <div style="font-weight:900; font-size:16px">${App.esc(g.title)}</div>
-            <span class="pill ${risk ? "bad" : ""}"><b>${App.esc(st.label)}</b></span>
+            <span class="pill ${risky ? "bad" : ""}"><b>${App.esc(st.label)}</b></span>
           </div>
+          <div class="muted">${App.esc(g.startDate || "—")} → ${App.esc(g.endDate || "—")}</div>
 
-          <div class="muted">
-            ${App.esc(catLabel(yr, g.categoryId))} • ${App.esc(g.startDate || "—")} → ${App.esc(g.endDate || "—")}
-          </div>
-
-          <div class="row" style="margin-top:8px">
+          <div class="row" style="margin-top:10px">
             <span class="pill">Progress <b>${App.esc(prog.label)}</b></span>
             ${overdueTasks ? `<span class="pill bad">Overdue tasks <b>${overdueTasks}</b></span>` : ``}
             ${g.linkedHabitIds.length ? `<span class="pill">Habits <b>${App.esc(String(g.linkedHabitIds.length))}</b></span>` : ``}
           </div>
 
           <div class="row" style="margin-top:10px">
-            <button class="btn small" data-open="${App.esc(g.id)}">Open</button>
-            <button class="btn small secondary" data-edit="${App.esc(g.id)}">Edit</button>
+            <button class="btn small" data-open-goal="${App.esc(g.id)}">Open</button>
+            <button class="btn small secondary" data-edit-goal="${App.esc(g.id)}">Edit</button>
           </div>
         </div>
       `;
@@ -365,69 +498,46 @@ window.Goals = window.Goals || {};
         <div class="card big hero">
           <div class="heroGlow"></div>
           <div>
-            <div class="kpi">Goals</div>
-            <div class="muted">Current year: <b>${App.esc(String(year))}</b></div>
-            <div class="row" style="margin-top:10px">
+            <div class="kpi">${App.esc(cat.name)}</div>
+            <div class="muted">Goals in this category • Year: <b>${App.esc(String(year))}</b></div>
+            <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+              <button class="btn secondary" id="backCatsBtn">← Categories</button>
               <button class="btn" id="newGoalBtn">+ New goal</button>
             </div>
             <div class="row" style="margin-top:10px">
-              <span class="pill">Total <b>${goals.length}</b></span>
-              <span class="pill">Overdue <b>${totalOverdue}</b></span>
+              <span class="pill">Goals <b>${goalsInCat.length}</b></span>
             </div>
           </div>
           ${App.heroSVG()}
         </div>
 
-        <div class="card big stack">
-          <div class="row" style="justify-content:space-between">
-            <div>
-              <div class="kpi" style="font-size:20px">List</div>
-              <div class="muted">Goal → Milestones → Tasks → Calendar</div>
-            </div>
-            <div class="row">
-              <select id="goalCatFilter" class="input" style="width:240px">${catOptions}</select>
-              <button class="btn secondary" id="addCatBtn">+ Category</button>
-            </div>
-          </div>
-
-          <div id="goalsList" class="stack" style="margin-top:12px; gap:12px">
-            ${goals.map(goalCard).join("") || `<div class="muted">No goals yet.</div>`}
-          </div>
+        <div class="gridYears">
+          ${
+            goalsInCat.length
+              ? goalsInCat.map(goalCard).join("")
+              : `
+                <div class="card big stack" style="grid-column:1/-1">
+                  <div class="kpi" style="font-size:20px">No goals yet</div>
+                  <div class="muted">Create your first goal in <b>${App.esc(cat.name)}</b>.</div>
+                  <div class="row" style="margin-top:10px">
+                    <button class="btn" id="emptyNewGoalBtn">+ Add goal</button>
+                  </div>
+                </div>
+              `
+          }
         </div>
       </div>
     `;
 
-    document.getElementById("newGoalBtn").onclick = () => openGoalEditor(null);
+    document.getElementById("backCatsBtn").onclick = () => App.navTo("#/goals");
+    document.getElementById("newGoalBtn").onclick = () => openGoalEditor(null, catId);
+    document.getElementById("emptyNewGoalBtn")?.addEventListener("click", () => openGoalEditor(null, catId));
 
-    document.getElementById("goalCatFilter").onchange = (e) => {
-      const id = e.target.value;
-      const filtered = id ? goals.filter((g) => g.categoryId === id) : goals;
-      document.getElementById("goalsList").innerHTML =
-        filtered.map(goalCard).join("") || `<div class="muted">No goals in this category.</div>`;
-
-      wireCards();
-    };
-
-    document.getElementById("addCatBtn").onclick = () => {
-      const name = prompt("New goal category name:");
-      if (!name) return;
-      const db2 = dbLoad();
-      const yr2 = App.getYearModel(db2);
-      ensureGoalCategories(yr2);
-      yr2.categories.goals.push({ id: dbUid(), name: name.trim(), archived: false });
-      dbSave(db2);
-      App.toast("Category added");
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    };
-
-    function wireCards() {
-      App.viewEl.querySelectorAll("[data-open]").forEach((btn) => {
-        btn.onclick = () => App.navTo(`#/goal/${btn.getAttribute("data-open")}`);
-      });
-      App.viewEl.querySelectorAll("[data-edit]").forEach((btn) => {
-        btn.onclick = () => openGoalEditor(btn.getAttribute("data-edit"));
-      });
-    }
-    wireCards();
+    App.viewEl.querySelectorAll("[data-open-goal]").forEach((btn) => {
+      btn.onclick = () => App.navTo(`#/goal/${btn.getAttribute("data-open-goal")}`);
+    });
+    App.viewEl.querySelectorAll("[data-edit-goal]").forEach((btn) => {
+      btn.onclick = () => openGoalEditor(btn.getAttribute("data-edit-goal"), catId);
+    });
   };
 })();
