@@ -4,12 +4,11 @@ const CACHE = "plans-glass-v12";
 // ✅ include tot ce folosește app-ul (altfel rămâi cu views vechi în cache)
 const ASSETS = [
   ".", "index.html", "styles.css", "manifest.webmanifest",
+  "sw.js",              // ✅ adaugă asta
 
-  // core
   "db.js",
   "app.js",
 
-  // views
   "views/dashboard.js",
   "views/yearHome.js",
   "views/goals.js",
