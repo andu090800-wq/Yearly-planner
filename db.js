@@ -1,8 +1,8 @@
-/* db.js (v2.1 - Categories per Year + Goals by Category + Global Habits per Year)
+/* db.js (v2.2 - Categories per Year + Goals by Category + Global Habits per Year)
 - Local-only storage (localStorage)
 - Years are user-created
 - Everything is per-year (currentYear), including goals/habits/budget/notes/calendar
-- Goals MUST have a categoryId
+- Goals MUST have a VALID categoryId (no auto "General" category)
 - Habits are global per-year: yr.habits
 - Goals link habits via goal.linkedHabitIds
 - Habits link goals via habit.linkedGoalIds
@@ -146,22 +146,12 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.categories.budgetIncome = Array.isArray(out.categories.budgetIncome) ? out.categories.budgetIncome.map(normCat) : [];
   out.categories.budgetExpense = Array.isArray(out.categories.budgetExpense) ? out.categories.budgetExpense.map(normCat) : [];
 
-  // Ensure at least a default goal category if we have goals without category (migration)
-  function ensureGeneralGoalCategory() {
-    let g = out.categories.goals.find(c => (c?.name || "").toLowerCase() === "general");
-    if (!g) {
-      g = { id: dbUid(), name: "General", archived: false };
-      out.categories.goals.unshift(g);
-    }
-    return g.id;
-  }
-
   // Goals
   out.goals = Array.isArray(out.goals) ? out.goals : [];
   out.goals = out.goals.map(g => ({
     id: String(g?.id || dbUid()),
     title: String(g?.title || "Untitled goal"),
-    categoryId: String(g?.categoryId || ""), // MUST exist (we'll fix below)
+    categoryId: String(g?.categoryId || ""), // MUST be valid (we enforce below)
     startDate: g?.startDate ? String(g.startDate) : "",
     endDate: g?.endDate ? String(g.endDate) : "",
     targetValue: (g?.targetValue ?? ""),
@@ -179,7 +169,7 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.habits = Array.isArray(out.habits) ? out.habits : [];
   out.habits = out.habits.map(normHabit);
 
-  // -------- Migration from "habits inside goals" (your v2 db.js) --------
+  // -------- Migration from "habits inside goals" (older db structure) --------
   // If some previous db had goal.habits, merge them into out.habits
   // and preserve links both ways.
   const seenHabitIds = new Set(out.habits.map(h => h.id));
@@ -214,12 +204,14 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     }
   }
 
-  // Enforce categoryId for every goal (required)
-  const generalId = ensureGeneralGoalCategory();
-  const validCatIds = new Set(out.categories.goals.map(c => c.id));
-  for (const g of out.goals) {
-    if (!g.categoryId || !validCatIds.has(g.categoryId)) g.categoryId = generalId;
-  }
+  // ✅ STRICT: Goals MUST have a VALID categoryId
+  // - NO auto-created "General" category
+  // - Any goal missing/invalid category is dropped during normalization
+  const validGoalCatIds = new Set((out.categories.goals || []).map(c => String(c.id)));
+  out.goals = (out.goals || []).filter(g => {
+    const cid = String(g?.categoryId || "");
+    return cid && validGoalCatIds.has(cid);
+  });
 
   // Notes
   out.notes = Array.isArray(out.notes) ? out.notes : [];
