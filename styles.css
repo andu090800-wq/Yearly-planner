@@ -1555,3 +1555,13 @@ textarea:focus{
   padding:10px 10px !important;
 }
 .dayBtn:active{ transform: scale(.99); opacity:.96; }
+
+.tabsScroll{
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  -webkit-overflow-scrolling:touch;
+  flex-wrap:nowrap !important;
+  justify-content:flex-start !important;
+  touch-action:pan-x;
+}
+.tabsScroll .tab{ flex:0 0 auto; white-space:nowrap; }
