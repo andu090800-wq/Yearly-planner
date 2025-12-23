@@ -98,17 +98,22 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // ---------- Robust savePrefs (scrie direct în anul curent) ----------
   function savePrefs(patch) {
-    const db2 = dbLoad();
-    const cy = db2?.settings?.currentYear;
-    if (cy == null) return;
+  const db2 = dbLoad();
 
-    dbEnsureYear(db2, Number(cy));
-    const yr2 = db2.years[String(cy)];
-    yr2.calendar = yr2.calendar || {};
-    Object.assign(yr2.calendar, patch);
-
-    dbSave(db2);
+  // ✅ garantează un an curent valid
+  let cy = Number(db2?.settings?.currentYear);
+  if (!Number.isFinite(cy)) {
+    cy = App.getCurrentYear(db2);          // fallback (ex: 2026)
+    db2.settings.currentYear = cy;         // ✅ IMPORTANT: persistă în settings
   }
+
+  dbEnsureYear(db2, cy);
+  const yr2 = db2.years[String(cy)];
+  yr2.calendar = yr2.calendar || {};
+  Object.assign(yr2.calendar, patch);
+
+  dbSave(db2);
+}
 
   // ---------- Habit due + toggle ----------
   function habitDueOn(h, iso) {
