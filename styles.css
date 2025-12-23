@@ -2024,3 +2024,99 @@ select.input{
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.10);
 }
+/* =========================================================
+   CALENDAR CONTRAST FIX (put this at the VERY END of file)
+   - removes washed-out white/purple
+   - keeps dark theme readable
+   ========================================================= */
+
+/* Calendar main cards / panels */
+.calCard,
+.iosCard,
+.calDetails,
+.dayAllDay,
+.dayTimeline,
+.agRow,
+.yMiniCard,
+.yTile,
+.iosSheet {
+  background: rgba(10, 14, 24, .72) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+/* Calendar toolbar / segmented / small controls */
+.calToolbar,
+.calSeg,
+.iosSeg {
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+/* Seg buttons active state = strong contrast */
+.calSegBtn.active,
+.iosSeg .segBtn.on,
+.iosSegBtn.active {
+  background: rgba(255,255,255,.14) !important;
+  border-color: rgba(255,255,255,.22) !important;
+  color: rgba(255,255,255,.95) !important;
+}
+
+/* Calendar cells should NEVER be white */
+.calCell,
+.iosDay,
+.wkDay,
+.yMiniCell,
+.dayItem {
+  background: transparent !important;
+}
+
+/* Default “pill” looks in calendar (no pale white) */
+.calCard .pill,
+.iosCard .pill,
+.calDetails .pill,
+.agRow .pill,
+.dayAllDay .pill,
+.dayTimeline .pill {
+  background: rgba(255,255,255,.08) !important;
+  border-color: rgba(255,255,255,.16) !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Status pills */
+.pill.bad,
+.calCard .pill.bad,
+.agRow .pill.bad {
+  background: rgba(255, 80, 80, .18) !important;
+  border-color: rgba(255, 120, 120, .35) !important;
+}
+
+/* Dots under days: increase visibility */
+.calDot,
+.iosDot,
+.wkDot,
+.yMiniDot {
+  background: rgba(255,255,255,.70) !important;
+}
+.calDot.ghost,
+.iosDot.ghost,
+.wkDot.ghost {
+  background: rgba(255,255,255,.16) !important;
+}
+
+/* Muted text inside calendar: raise contrast */
+.calCard .muted,
+.iosCard .muted,
+.calDetails .muted,
+.agRow .agSub,
+.dayHourLabel {
+  color: rgba(255,255,255,.72) !important;
+}
+
+/* If any old “white glass” leaks into calendar */
+.calCard .glass,
+.calCard .glass2,
+.iosCard .glass,
+.iosCard .glass2 {
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.12) !important;
+}
