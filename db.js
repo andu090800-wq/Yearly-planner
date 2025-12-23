@@ -1,9 +1,11 @@
-/* db.js (v2 - Goals by Category per Year + Habits inside Goals)
+/* db.js (v2.1 - Categories per Year + Goals by Category + Global Habits per Year)
 - Local-only storage (localStorage)
 - Years are user-created
 - Everything is per-year (currentYear), including goals/habits/budget/notes/calendar
 - Goals MUST have a categoryId
-- Habits are stored inside each goal (parallel to milestones)
+- Habits are global per-year: yr.habits
+- Goals link habits via goal.linkedHabitIds
+- Habits link goals via habit.linkedGoalIds
 - Safe normalization + migration from old structure
 */
 
@@ -26,6 +28,7 @@ function dbTodayISO() {
 function defaultCategoriesPerYear() {
   return {
     goals: [],         // {id, name, archived}
+    habits: [],        // {id, name, archived}
     budgetIncome: [],  // {id, name, archived}
     budgetExpense: []  // {id, name, archived}
   };
@@ -53,7 +56,10 @@ function defaultYearModel(yearNum) {
     // goals per-year
     goals: [],
 
-    // notes per-year (simplu pentru moment)
+    // habits per-year (GLOBAL, used by views/habits.js)
+    habits: [],
+
+    // notes per-year
     notes: [], // {id, title, text, createdAt, updatedAt}
 
     calendar: {
@@ -112,24 +118,31 @@ function normMilestone(ms) {
 function normHabit(h) {
   return {
     id: String(h?.id || dbUid()),
+    createdAt: String(h?.createdAt || dbTodayISO()),
     title: String(h?.title || "Habit"),
+    categoryId: String(h?.categoryId || ""),
     notes: String(h?.notes || ""),
-    recurrenceRule: (h?.recurrenceRule && typeof h.recurrenceRule === "object")
-      ? h.recurrenceRule
-      : { kind: "weekdays" },
-    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {},
-    createdAt: String(h?.createdAt || dbTodayISO())
+    recurrenceRule:
+      (h?.recurrenceRule && typeof h.recurrenceRule === "object")
+        ? h.recurrenceRule
+        : { kind: "weekdays" },
+    linkedGoalIds: Array.isArray(h?.linkedGoalIds) ? h.linkedGoalIds.map(String) : [],
+    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {}
   };
 }
 
 function normalizeYearModel(yearModel, yearNumFallback) {
   const y = Number(yearModel?.year ?? yearNumFallback);
-  const out = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
+  const base = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
+
+  // always ensure structure
+  const out = base;
   out.year = y;
 
   // Categories
   if (!out.categories || typeof out.categories !== "object") out.categories = defaultCategoriesPerYear();
   out.categories.goals = Array.isArray(out.categories.goals) ? out.categories.goals.map(normCat) : [];
+  out.categories.habits = Array.isArray(out.categories.habits) ? out.categories.habits.map(normCat) : [];
   out.categories.budgetIncome = Array.isArray(out.categories.budgetIncome) ? out.categories.budgetIncome.map(normCat) : [];
   out.categories.budgetExpense = Array.isArray(out.categories.budgetExpense) ? out.categories.budgetExpense.map(normCat) : [];
 
@@ -158,60 +171,46 @@ function normalizeYearModel(yearModel, yearNumFallback) {
 
     milestones: Array.isArray(g?.milestones) ? g.milestones.map(normMilestone) : [],
 
-    // NEW: habits inside goal (parallel to milestones)
-    habits: Array.isArray(g?.habits) ? g.habits.map(normHabit) : []
+    // Linking model used by your views:
+    linkedHabitIds: Array.isArray(g?.linkedHabitIds) ? g.linkedHabitIds.map(String) : []
   }));
 
-  // Migration: if old structure had linkedHabitIds or year.habits, try to attach
-  // (we won't keep global habits as feature, but we won't lose data)
-  const legacyYearHabits = Array.isArray(out.habits) ? out.habits : []; // from old db.js
-  if (legacyYearHabits.length) {
-    // Build quick maps
-    const byId = new Map(legacyYearHabits.map(h => [String(h?.id || ""), h]));
-    // Attach by linkedGoalIds
-    for (const lh of legacyYearHabits) {
-      const linkedGoalIds = Array.isArray(lh?.linkedGoalIds) ? lh.linkedGoalIds.map(String) : [];
-      if (!linkedGoalIds.length) continue;
-      for (const gid of linkedGoalIds) {
-        const goal = out.goals.find(g => g.id === gid);
-        if (goal) goal.habits.push(normHabit(lh));
+  // Habits (GLOBAL per-year)
+  out.habits = Array.isArray(out.habits) ? out.habits : [];
+  out.habits = out.habits.map(normHabit);
+
+  // -------- Migration from "habits inside goals" (your v2 db.js) --------
+  // If some previous db had goal.habits, merge them into out.habits
+  // and preserve links both ways.
+  const seenHabitIds = new Set(out.habits.map(h => h.id));
+
+  for (const gRaw of (Array.isArray(base?.goals) ? base.goals : [])) {
+    const gId = String(gRaw?.id || "");
+    const goal = out.goals.find(x => x.id === gId);
+    const innerHabits = Array.isArray(gRaw?.habits) ? gRaw.habits : [];
+    if (!innerHabits.length) continue;
+
+    for (const h0 of innerHabits) {
+      const h = normHabit(h0);
+
+      // ensure it’s global
+      if (!seenHabitIds.has(h.id)) {
+        out.habits.push(h);
+        seenHabitIds.add(h.id);
       }
-    }
 
-    // Attach by goals that had linkedHabitIds (old)
-    for (const goalRaw of (Array.isArray(yearModel?.goals) ? yearModel.goals : [])) {
-      const goal = out.goals.find(g => g.id === String(goalRaw?.id || ""));
-      const linkedHabitIds = Array.isArray(goalRaw?.linkedHabitIds) ? goalRaw.linkedHabitIds.map(String) : [];
-      if (!goal || !linkedHabitIds.length) continue;
-      for (const hid of linkedHabitIds) {
-        const lh = byId.get(hid);
-        if (lh) goal.habits.push(normHabit(lh));
+      // ensure reverse link habit -> goal
+      const hRef = out.habits.find(x => x.id === h.id);
+      if (hRef) {
+        hRef.linkedGoalIds = Array.isArray(hRef.linkedGoalIds) ? hRef.linkedGoalIds : [];
+        if (goal && !hRef.linkedGoalIds.includes(goal.id)) hRef.linkedGoalIds.push(goal.id);
       }
-    }
 
-    // Any leftover habits that weren't attached → put into a special imported goal
-    const attached = new Set();
-    for (const g of out.goals) for (const h of g.habits) attached.add(h.id);
-
-    const leftovers = legacyYearHabits
-      .map(normHabit)
-      .filter(h => !attached.has(h.id));
-
-    if (leftovers.length) {
-      const catId = ensureGeneralGoalCategory();
-      out.goals.push({
-        id: dbUid(),
-        title: "Imported Habits",
-        categoryId: catId,
-        startDate: "",
-        endDate: "",
-        targetValue: "",
-        currentValue: "",
-        unit: "",
-        notes: "Auto-created during migration.",
-        milestones: [],
-        habits: leftovers
-      });
+      // ensure forward link goal -> habit
+      if (goal) {
+        goal.linkedHabitIds = Array.isArray(goal.linkedHabitIds) ? goal.linkedHabitIds : [];
+        if (!goal.linkedHabitIds.includes(h.id)) goal.linkedHabitIds.push(h.id);
+      }
     }
   }
 
@@ -299,8 +298,6 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     lastGeneratedThrough: r?.lastGeneratedThrough ? String(r.lastGeneratedThrough) : ""
   }));
 
-  // cleanup legacy field if present (not used anymore)
-  out.habits = []; // no global habits
   return out;
 }
 
