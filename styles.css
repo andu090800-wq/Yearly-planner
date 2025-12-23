@@ -1615,3 +1615,101 @@ textarea:focus{
 
 /* ensure it is NEVER over the header */
 .top{ position: sticky; top:0; z-index:50; }
+
+/* =========================
+   Pull To Refresh (iOS-like)
+   Appears UNDER top header
+   ========================= */
+
+#ptr{
+  position: fixed;
+  left: 0;
+  right: 0;
+
+  /* top is set dynamically from JS = header height */
+  top: 56px;
+
+  height: 72px;
+  z-index: 40;
+  pointer-events: none;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  transform: translateY(calc(-100% + var(--ptrY, 0px)));
+  opacity: var(--ptrOpacity, 0);
+
+  transition:
+    transform .25s cubic-bezier(.2,.8,.2,1),
+    opacity .2s ease;
+}
+
+.ptrInner{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow2);
+
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+/* Spinner */
+.ptrSpinner{
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.15);
+  border-top-color: rgba(0,0,0,.65);
+  animation: ptrSpin 1s linear infinite;
+  opacity: .7;
+}
+
+@keyframes ptrSpin{
+  to{ transform: rotate(360deg); }
+}
+
+/* Pulling */
+#ptr.ptrPulling{
+  transition: none;
+}
+
+/* Armed (Release to refresh) */
+#ptr.ptrArmed .ptrInner{
+  color: #111;
+  background: rgba(255,255,255,.97);
+}
+
+/* Refreshing */
+#ptr.ptrRefreshing{
+  opacity: 1;
+}
+
+#ptr.ptrRefreshing .ptrInner{
+  color: #111;
+}
+
+#ptr.ptrRefreshing .ptrSpinner{
+  opacity: 1;
+}
+
+/* Hide spinner when not refreshing (optional, iOS-like) */
+#ptr:not(.ptrRefreshing) .ptrSpinner{
+  animation: none;
+  border-top-color: rgba(0,0,0,.25);
+}
+
+/* Prevent overlap on very small screens */
+@media (max-width: 360px){
+  #ptr{
+    height: 64px;
+  }
+}
