@@ -1,18 +1,15 @@
-// sw.js (FINAL - robust, no stale views)
-const CACHE = "plans-glass-v20";
+// sw.js (FINAL - iOS-friendly updates, no stale app shell)
+const CACHE = "plans-glass-v21";
 
-// ✅ include tot ce folosește app-ul (altfel rămâi cu views vechi în cache)
 const ASSETS = [
   "./",
   "index.html",
   "styles.css",
   "manifest.webmanifest",
 
-  // core
   "db.js",
   "app.js",
 
-  // views
   "views/dashboard.js",
   "views/yearHome.js",
   "views/goals.js",
@@ -38,23 +35,28 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
-    // șterge cache-urile vechi
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => (k !== CACHE ? caches.delete(k) : null)));
     await self.clients.claim();
   })());
 });
 
-// ----- Strategies -----
-async function networkFirst(req) {
+async function networkFirst(req, { fallbackToIndex = false } = {}) {
   try {
-    const fresh = await fetch(req);
+    // IMPORTANT for iOS PWAs: bypass HTTP cache for navigations
+    const fresh = await fetch(req, { cache: "no-store" });
     const cache = await caches.open(CACHE);
     cache.put(req, fresh.clone());
     return fresh;
   } catch {
     const cached = await caches.match(req);
     if (cached) return cached;
+
+    if (fallbackToIndex) {
+      const idx = await caches.match("index.html");
+      if (idx) return idx;
+    }
+
     return new Response("Offline", { status: 503, statusText: "Offline" });
   }
 }
@@ -71,24 +73,19 @@ async function cacheFirst(req) {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-
-  // nu cache-ui requesturi non-GET
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-
-  // doar same-origin
   if (url.origin !== self.location.origin) return;
 
   const accept = req.headers.get("accept") || "";
 
-  // ✅ HTML navigations: network-first (primești mereu ultima versiune)
+  // HTML navigations (App Shell): network-first + fallback to index.html
   if (req.mode === "navigate" || accept.includes("text/html")) {
-    e.respondWith(networkFirst(req));
+    e.respondWith(networkFirst(req, { fallbackToIndex: true }));
     return;
   }
 
-  // ✅ Static assets: cache-first (rapid, offline-friendly)
   const isStatic =
     url.pathname.endsWith(".js") ||
     url.pathname.endsWith(".css") ||
@@ -106,6 +103,5 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // ✅ Anything else (json, etc): network-first (evită “înghețarea”)
   e.respondWith(networkFirst(req));
 });
