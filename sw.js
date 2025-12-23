@@ -1,5 +1,5 @@
 // sw.js (FINAL - iOS-friendly updates, no stale app shell)
-const CACHE = "plans-glass-v36";
+const CACHE = "plans-glass-v37";
 
 const ASSETS = [
   "./",
