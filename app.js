@@ -1,7 +1,6 @@
-// app.js — router + shared helpers (SAFE + resilient)
+// app.js — router + shared helpers (FIXED: rebind #view each render)
 (() => {
   // ---------- DOM ----------
-  const view = document.getElementById("view");
   const crumb = document.getElementById("crumb");
   const primaryActionBtn = document.getElementById("primaryActionBtn");
   const toastEl = document.getElementById("toast");
@@ -13,7 +12,9 @@
 
   // ---------- Shared App object ----------
   const App = (window.App = window.App || {});
-  App.viewEl = view;
+
+  // IMPORTANT: viewEl is (re)bound in render() because some views might replace DOM
+  App.viewEl = document.getElementById("view");
 
   App.setCrumb = (t) => { if (crumb) crumb.textContent = t || ""; };
   App.navTo = (h) => { location.hash = h; };
@@ -38,7 +39,7 @@
     return h.split("/").filter(Boolean);
   };
 
-  // ✅ FIX: views expect this; without it, navigation breaks
+  // views expect this
   App.heroSVG = () => "";
 
   // ---------- Current year helpers ----------
@@ -76,7 +77,6 @@
 
   // ---------- Active nav highlight ----------
   function mapToRootTab(route) {
-    // detail routes should highlight parent tab
     if (route === "goal") return "goals";
     if (route === "year") return "dashboard";
     return route;
@@ -153,6 +153,22 @@
   window.addEventListener("DOMContentLoaded", render);
   render();
 
+  function ensureViewEl() {
+    // Re-bind every render in case some view replaced the DOM node
+    let el = document.getElementById("view");
+    if (!el) {
+      // extreme fallback: recreate it inside .content
+      const content = document.querySelector(".content");
+      if (content) {
+        el = document.createElement("div");
+        el.id = "view";
+        content.appendChild(el);
+      }
+    }
+    App.viewEl = el;
+    return el;
+  }
+
   function safeCallView(fn, ctx) {
     try {
       return fn?.(ctx);
@@ -160,7 +176,11 @@
       console.error("View crashed:", e);
       App.setCrumb("Error");
       setPrimary("+ Add", () => App.toast("Coming soon"));
-      App.viewEl.innerHTML = `
+
+      const v = ensureViewEl();
+      if (!v) return;
+
+      v.innerHTML = `
         <div class="card big stack">
           <div class="kpi" style="font-size:20px">Something crashed</div>
           <div class="muted">Open DevTools → Console for details.</div>
@@ -178,11 +198,17 @@
     const parts = App.parseHash();
     if (!parts.length) return App.navTo("#/dashboard");
 
+    // ✅ critical: refresh view element reference every navigation
+    ensureViewEl();
+
     const route = parts[0];
     setActiveNav(route);
 
     const ctx = { db, App, setPrimary };
     const Views = window.Views || {};
+
+    // (optional but nice) clear before render so stale UI doesn't “stick”
+    if (App.viewEl) App.viewEl.innerHTML = "";
 
     if (route === "dashboard") return safeCallView(Views.dashboard, ctx);
 
