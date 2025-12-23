@@ -1,9 +1,9 @@
 /* db.js (FINAL)
-   - Local-only storage (localStorage)
-   - No preset years: user creates years manually from Dashboard
-   - Global settings: currency (RON/EUR/USD), weekStartsOn Monday
-   - Supports Goals, Habits (binary), Calendar, Budget Pro
-   - Safe normalization/migrations
+- Local-only storage (localStorage)
+- No preset years: user creates years manually from Dashboard
+- Global settings: currency (RON/EUR/USD), weekStartsOn Monday
+- Supports Goals, Habits (binary), Calendar, Budget Pro
+- Safe normalization/migrations
 */
 
 const DB_KEY = "plans_app_db_v1";
@@ -24,10 +24,10 @@ function dbTodayISO() {
 // ---------- Defaults ----------
 function defaultCategoriesPerYear() {
   return {
-    goals: [],         // {id, name, archived}
-    habits: [],        // {id, name, archived}
-    budgetIncome: [],  // {id, name, archived}
-    budgetExpense: []  // {id, name, archived}
+    goals: [], // {id, name, archived}
+    habits: [], // {id, name, archived}
+    budgetIncome: [], // {id, name, archived}
+    budgetExpense: [] // {id, name, archived}
   };
 }
 
@@ -48,15 +48,19 @@ function defaultBudgetPro() {
 }
 
 function defaultYearModel(yearNum) {
+  const t = dbTodayISO();
   return {
     year: Number(yearNum),
     categories: defaultCategoriesPerYear(),
     goals: [],
     habits: [],
     calendar: {
-      defaultView: "week",
+      defaultView: "week", // day|week|month|year
       filters: { tasks: true, habits: true, milestones: true, goals: true },
-      focus: { type: "all", id: "" }
+      focus: { type: "all", id: "" },
+      focusDate: t,
+      selectedDate: t,
+      panelsOpen: false
     },
     budget: defaultBudgetPro()
   };
@@ -140,7 +144,13 @@ function normalizeYearModel(yearModel, yearNumFallback) {
 
   // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
-  out.calendar.defaultView = ["week", "month", "year"].includes(out.calendar.defaultView) ? out.calendar.defaultView : "week";
+
+  // ✅ allow day
+  out.calendar.defaultView =
+    ["day", "week", "month", "year"].includes(out.calendar.defaultView)
+      ? out.calendar.defaultView
+      : "week";
+
   if (!out.calendar.filters || typeof out.calendar.filters !== "object") {
     out.calendar.filters = { tasks: true, habits: true, milestones: true, goals: true };
   } else {
@@ -149,9 +159,16 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     out.calendar.filters.milestones = out.calendar.filters.milestones !== false;
     out.calendar.filters.goals = out.calendar.filters.goals !== false;
   }
+
   if (!out.calendar.focus || typeof out.calendar.focus !== "object") out.calendar.focus = { type: "all", id: "" };
   if (!["all", "goal", "habit"].includes(out.calendar.focus.type)) out.calendar.focus.type = "all";
   out.calendar.focus.id = String(out.calendar.focus.id || "");
+
+  // ✅ persist these
+  const t = dbTodayISO();
+  out.calendar.focusDate = out.calendar.focusDate ? String(out.calendar.focusDate) : t;
+  out.calendar.selectedDate = out.calendar.selectedDate ? String(out.calendar.selectedDate) : t;
+  out.calendar.panelsOpen = !!out.calendar.panelsOpen;
 
   // Budget
   if (!out.budget || typeof out.budget !== "object") out.budget = defaultBudgetPro();
@@ -214,19 +231,16 @@ function normalizeDb(db) {
   out.years = out.years && typeof out.years === "object" ? out.years : {};
   out.yearsOrder = Array.isArray(out.yearsOrder) ? out.yearsOrder.map(Number).filter(Number.isFinite) : [];
 
-  // Add keys present in years into yearsOrder
   for (const k of Object.keys(out.years)) {
     const n = Number(k);
     if (Number.isFinite(n) && !out.yearsOrder.includes(n)) out.yearsOrder.push(n);
   }
   out.yearsOrder.sort((a, b) => a - b);
 
-  // Normalize each year model
   for (const y of out.yearsOrder) {
     out.years[String(y)] = normalizeYearModel(out.years[String(y)], y);
   }
 
-  // If currentYear set but doesn't exist, create it
   if (out.settings.currentYear != null) {
     const cy = Number(out.settings.currentYear);
     if (!out.yearsOrder.includes(cy)) {
@@ -299,14 +313,11 @@ function dbDeleteYear(db, yearNum) {
   const key = String(y);
   if (!db.years || !db.years[key]) throw new Error("Year not found");
 
-  // Remove year model completely
   delete db.years[key];
 
-  // Remove from years order
   db.yearsOrder = Array.isArray(db.yearsOrder) ? db.yearsOrder : [];
   db.yearsOrder = db.yearsOrder.filter(n => Number(n) !== y);
 
-  // Fix current year
   if (db.settings?.currentYear === y) {
     db.settings.currentYear = db.yearsOrder.length ? db.yearsOrder[0] : null;
   }
