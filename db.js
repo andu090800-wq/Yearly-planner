@@ -1,11 +1,12 @@
-/* db.js (v2.2 - STRICT categories)
+/* db.js (v2.3 - STRICT categories + Apple Notes DB model)
 - Local-only storage (localStorage)
 - Years are user-created
 - Everything is per-year (currentYear)
 - Goals MUST have a valid categoryId (NO defaults like "General")
-- If a goal has missing/invalid categoryId during normalize => it is DELETED (per user rule)
-- Habits are per-year global (yr.habits) but categories are NOT separate:
-  Habits are "linked" to Goal categories via linkedGoalIds -> goal.categoryId
+- If a goal has missing/invalid categoryId during normalize => it is DELETED
+- Habits are per-year global (yr.habits) linked to goals via linkedGoalIds
+- Notes are Apple Notes-ish: folders -> files -> notes (per-year)
+  - Migration from old yr.notes[] {id,title,text,createdAt,updatedAt} -> new model
 */
 
 const DB_KEY = "plans_app_db_v1"; // păstrat ca să NU pierzi datele vechi
@@ -21,6 +22,15 @@ function dbTodayISO() {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function dbNowMs() { return Date.now(); }
+
+function dbParseMs(x) {
+  if (Number.isFinite(x)) return Number(x);
+  if (!x) return NaN;
+  const t = new Date(String(x)).getTime();
+  return Number.isFinite(t) ? t : NaN;
 }
 
 // ---------- Defaults ----------
@@ -44,6 +54,25 @@ function defaultBudgetPro() {
   };
 }
 
+/**
+ * Notes model (Apple Notes-ish)
+ * folders: [{id,name,createdAt,updatedAt}]
+ * files:   [{id,folderId,name,createdAt,updatedAt}]
+ * notes:   [{id,fileId,title,body,pinned,archived,createdAt,updatedAt}]
+ * ui:      {folderId,fileId,noteId,q}
+ */
+function defaultNotesModel() {
+  const now = dbNowMs();
+  const folderId = dbUid();
+  const fileId = dbUid();
+  return {
+    folders: [{ id: folderId, name: "iCloud", createdAt: now, updatedAt: now }],
+    files:   [{ id: fileId, folderId, name: "Notes", createdAt: now, updatedAt: now }],
+    notes:   [],
+    ui: { folderId, fileId, noteId: "", q: "" }
+  };
+}
+
 function defaultYearModel(yearNum) {
   const t = dbTodayISO();
   return {
@@ -54,7 +83,8 @@ function defaultYearModel(yearNum) {
     goals: [],   // per-year
     habits: [],  // per-year (global list)
 
-    notes: [],   // {id, title, text, createdAt, updatedAt}
+    // ✅ per-year notes model
+    notes: defaultNotesModel(),
 
     calendar: {
       defaultView: "week", // day|week|month|year
@@ -124,6 +154,142 @@ function normHabit(h) {
   };
 }
 
+// Notes normalize
+function normNotesFolder(f) {
+  const c = dbParseMs(f?.createdAt);
+  const u = dbParseMs(f?.updatedAt);
+  const createdAt = Number.isFinite(c) ? c : dbNowMs();
+  const updatedAt = Number.isFinite(u) ? u : createdAt;
+
+  return {
+    id: String(f?.id || dbUid()),
+    name: String(f?.name || "Folder"),
+    createdAt,
+    updatedAt
+  };
+}
+
+function normNotesFile(fl) {
+  const c = dbParseMs(fl?.createdAt);
+  const u = dbParseMs(fl?.updatedAt);
+  const createdAt = Number.isFinite(c) ? c : dbNowMs();
+  const updatedAt = Number.isFinite(u) ? u : createdAt;
+
+  return {
+    id: String(fl?.id || dbUid()),
+    folderId: String(fl?.folderId || ""),
+    name: String(fl?.name || "Notes"),
+    createdAt,
+    updatedAt
+  };
+}
+
+function normNote(n) {
+  const c = dbParseMs(n?.createdAt);
+  const u = dbParseMs(n?.updatedAt);
+  const createdAt = Number.isFinite(c) ? c : dbNowMs();
+  const updatedAt = Number.isFinite(u) ? u : createdAt;
+
+  return {
+    id: String(n?.id || dbUid()),
+    fileId: String(n?.fileId || ""),
+    title: String(n?.title || "Note"),
+    body: String(n?.body ?? n?.text ?? ""),
+    pinned: !!n?.pinned,
+    archived: !!n?.archived,
+    createdAt,
+    updatedAt
+  };
+}
+
+function normalizeNotesModel(notesAny) {
+  // Old shape: yr.notes = [{id,title,text,createdAt,updatedAt}]
+  if (Array.isArray(notesAny)) {
+    const fresh = defaultNotesModel();
+    const fileId = fresh.ui.fileId;
+
+    fresh.notes = notesAny.map(n => {
+      const createdAt = dbParseMs(n?.createdAt);
+      const updatedAt = dbParseMs(n?.updatedAt) || createdAt;
+      return {
+        id: String(n?.id || dbUid()),
+        fileId,
+        title: String(n?.title || "Note"),
+        body: String(n?.text || ""),
+        pinned: false,
+        archived: false,
+        createdAt: Number.isFinite(createdAt) ? createdAt : dbNowMs(),
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : (Number.isFinite(createdAt) ? createdAt : dbNowMs())
+      };
+    });
+
+    // select best note
+    fresh.notes.sort((a,b) => (b.pinned|0)-(a.pinned|0) || (b.updatedAt||0)-(a.updatedAt||0));
+    fresh.ui.noteId = fresh.notes[0]?.id || "";
+    return fresh;
+  }
+
+  // Missing or invalid => default
+  if (!notesAny || typeof notesAny !== "object") return defaultNotesModel();
+
+  const out = notesAny;
+
+  out.folders = Array.isArray(out.folders) ? out.folders.map(normNotesFolder) : [];
+  out.files   = Array.isArray(out.files)   ? out.files.map(normNotesFile) : [];
+  out.notes   = Array.isArray(out.notes)   ? out.notes.map(normNote) : [];
+  out.ui      = (out.ui && typeof out.ui === "object") ? out.ui : { folderId:"", fileId:"", noteId:"", q:"" };
+
+  // Ensure minimum structure exists
+  if (!out.folders.length || !out.files.length) {
+    const fresh = defaultNotesModel();
+    const fileId = fresh.ui.fileId;
+    fresh.notes = out.notes.map(n => ({ ...n, fileId }));
+    fresh.notes.sort((a,b) => (b.pinned|0)-(a.pinned|0) || (b.updatedAt||0)-(a.updatedAt||0));
+    fresh.ui.noteId = fresh.notes[0]?.id || "";
+    return fresh;
+  }
+
+  // Fix file.folderId
+  const folderIds = new Set(out.folders.map(f => f.id));
+  out.files = out.files.map(f => ({
+    ...f,
+    folderId: folderIds.has(f.folderId) ? f.folderId : out.folders[0].id
+  }));
+
+  // Fix note.fileId
+  const fileIds = new Set(out.files.map(f => f.id));
+  const fallbackFileId = out.files[0].id;
+  out.notes = out.notes.map(n => ({
+    ...n,
+    fileId: fileIds.has(n.fileId) ? n.fileId : fallbackFileId
+  }));
+
+  // UI validity
+  out.ui.folderId = String(out.ui.folderId || "");
+  out.ui.fileId = String(out.ui.fileId || "");
+  out.ui.noteId = String(out.ui.noteId || "");
+  out.ui.q = String(out.ui.q || "");
+
+  if (!folderIds.has(out.ui.folderId)) out.ui.folderId = out.folders[0].id;
+
+  const filesInFolder = out.files.filter(f => f.folderId === out.ui.folderId);
+  const firstFileInFolder = filesInFolder[0] || out.files[0];
+
+  if (!fileIds.has(out.ui.fileId)) out.ui.fileId = firstFileInFolder.id;
+  if (!out.files.find(f => f.id === out.ui.fileId && f.folderId === out.ui.folderId)) {
+    out.ui.fileId = firstFileInFolder.id;
+  }
+
+  const notesInFile = out.notes.filter(n => n.fileId === out.ui.fileId);
+  const noteIdsInFile = new Set(notesInFile.map(n => n.id));
+  if (!noteIdsInFile.has(out.ui.noteId)) {
+    notesInFile.sort((a,b) => (b.pinned|0)-(a.pinned|0) || (b.updatedAt||0)-(a.updatedAt||0));
+    out.ui.noteId = notesInFile[0]?.id || "";
+  }
+
+  return out;
+}
+
 function normalizeYearModel(yearModel, yearNumFallback) {
   const y = Number(yearModel?.year ?? yearNumFallback);
   const base = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
@@ -131,14 +297,9 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   const out = base;
   out.year = y;
 
-  // Categories (GOALS are the single source of categories)
+  // Categories
   if (!out.categories || typeof out.categories !== "object") out.categories = defaultCategoriesPerYear();
-
-  // Accept old shapes safely
   out.categories.goals = Array.isArray(out.categories.goals) ? out.categories.goals.map(normCat) : [];
-
-  // Backward compat: if old db had categories.habits, ignore it (we unify to goals categories)
-  // Keep budget cats
   out.categories.budgetIncome = Array.isArray(out.categories.budgetIncome) ? out.categories.budgetIncome.map(normCat) : [];
   out.categories.budgetExpense = Array.isArray(out.categories.budgetExpense) ? out.categories.budgetExpense.map(normCat) : [];
 
@@ -147,7 +308,7 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.goals = out.goals.map(g => ({
     id: String(g?.id || dbUid()),
     title: String(g?.title || "Untitled goal"),
-    categoryId: String(g?.categoryId || ""), // MUST be valid, otherwise goal will be deleted below
+    categoryId: String(g?.categoryId || ""),
     startDate: g?.startDate ? String(g.startDate) : "",
     endDate: g?.endDate ? String(g.endDate) : "",
     targetValue: (g?.targetValue ?? ""),
@@ -162,7 +323,7 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.habits = Array.isArray(out.habits) ? out.habits : [];
   out.habits = out.habits.map(normHabit);
 
-  // -------- Migration: if some older db had goal.habits, merge them into yr.habits --------
+  // Migration: goal.habits -> yr.habits
   const seenHabitIds = new Set(out.habits.map(h => h.id));
   for (const gRaw of (Array.isArray(base?.goals) ? base.goals : [])) {
     const gId = String(gRaw?.id || "");
@@ -185,33 +346,29 @@ function normalizeYearModel(yearModel, yearNumFallback) {
       }
 
       if (goal) {
-        goal.linkedHabitIds = Array.isArray(goal.linkedHabitIds) ? goal.linkedHabitIds : [];
+        goal.linkedHabitIds = Array.isArray(goal.linkedHabitIds) ? goal.linkedHabitIds.map(String) : [];
         if (!goal.linkedHabitIds.includes(h.id)) goal.linkedHabitIds.push(h.id);
       }
     }
   }
 
-  // ---------- STRICT RULE: goals MUST have valid categoryId ----------
-  // If missing/invalid => DELETE (per user instruction).
+  // STRICT categories: delete invalid goals
   const validCatIds = new Set((out.categories.goals || []).map(c => String(c.id)));
-
   const deletedGoalIds = new Set();
+
   out.goals = (out.goals || []).filter(g => {
     const ok = !!g.categoryId && validCatIds.has(String(g.categoryId));
     if (!ok) deletedGoalIds.add(String(g.id));
     return ok;
   });
 
-  // Cleanup reverse links because some goals were deleted
   if (deletedGoalIds.size) {
-    // remove deleted goals from habits.linkedGoalIds
     out.habits = (out.habits || []).map(h => {
       h.linkedGoalIds = Array.isArray(h.linkedGoalIds) ? h.linkedGoalIds.map(String) : [];
       h.linkedGoalIds = h.linkedGoalIds.filter(id => !deletedGoalIds.has(String(id)));
       return h;
     });
 
-    // also remove any habit link on goals that no longer exists (optional cleanup)
     const habitIds = new Set((out.habits || []).map(h => h.id));
     out.goals = (out.goals || []).map(g => {
       g.linkedHabitIds = Array.isArray(g.linkedHabitIds) ? g.linkedHabitIds.map(String) : [];
@@ -220,18 +377,12 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     });
   }
 
-  // Notes
-  out.notes = Array.isArray(out.notes) ? out.notes : [];
-  out.notes = out.notes.map(n => ({
-    id: String(n?.id || dbUid()),
-    title: String(n?.title || "Note"),
-    text: String(n?.text || ""),
-    createdAt: String(n?.createdAt || dbTodayISO()),
-    updatedAt: String(n?.updatedAt || n?.createdAt || dbTodayISO())
-  }));
+  // ✅ Notes (new model + migration)
+  out.notes = normalizeNotesModel(out.notes);
 
   // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
+
   out.calendar.defaultView =
     ["day", "week", "month", "year"].includes(out.calendar.defaultView)
       ? out.calendar.defaultView
