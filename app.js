@@ -49,14 +49,31 @@
       <circle cx="188" cy="56" r="6" fill="black"/>
     </svg>`;
 
-  // Current year helpers
+  // ---------- Current year helpers (FIXED) ----------
+  // IMPORTANT:
+  // - dacă nu există niciun an creat încă => return null (view-urile decid ce fac)
+  // - dacă există ani dar currentYear e null => alegem ultimul an și îl persistăm
   App.getCurrentYear = (db) => {
-    const y = Number(db?.settings?.currentYear ?? 2026);
+    const list = Array.isArray(db?.yearsOrder) ? db.yearsOrder : [];
+    let cy = db?.settings?.currentYear;
+
+    if (cy == null) {
+      if (!list.length) return null;
+
+      cy = Number(list[list.length - 1]);
+      db.settings = db.settings || {};
+      db.settings.currentYear = cy;
+      dbSave(db); // persistă ca să nu rămână null
+    }
+
+    const y = Number(cy);
     dbEnsureYear(db, y);
     return y;
   };
+
   App.getYearModel = (db) => {
     const y = App.getCurrentYear(db);
+    if (y == null) return null;
     return dbEnsureYear(db, y);
   };
 
@@ -133,7 +150,7 @@
           <div class="kpi">${App.esc(title)}</div>
           <div class="muted">${App.esc(subtitle || "This screen will be built in the next stages.")}</div>
           <div class="row" style="margin-top:10px">
-            <span class="pill">Year <b>${App.esc(String(y))}</b></span>
+            <span class="pill">Year <b>${App.esc(String(y ?? ""))}</b></span>
             <span class="pill">Currency <b>${App.esc(db.settings.currency)}</b></span>
             <span class="pill">Week starts <b>Monday</b></span>
             <span class="pill">Today <b>${App.esc(dbTodayISO())}</b></span>
@@ -149,46 +166,46 @@
   render();
 
   function render() {
-  const db = dbLoad();
-  const parts = App.parseHash();
-  if (!parts.length) return App.navTo("#/dashboard");
+    const db = dbLoad();
+    const parts = App.parseHash();
+    if (!parts.length) return App.navTo("#/dashboard");
 
-  const route = parts[0];
-  setActiveNav(route);
+    const route = parts[0];
+    setActiveNav(route);
 
-  // ctx passed to views
-  const ctx = { db, App, setPrimary };
+    // ctx passed to views
+    const ctx = { db, App, setPrimary };
 
-  // Views registry
-  const Views = window.Views || {};
+    // Views registry
+    const Views = window.Views || {};
 
-  // Dispatch (REAL views)
-  if (route === "dashboard") return Views.dashboard?.(ctx);
+    // Dispatch (REAL views)
+    if (route === "dashboard") return Views.dashboard?.(ctx);
 
-  if (route === "year" && parts[1]) {
-    ctx.year = Number(parts[1]);
-    return Views.yearHome?.(ctx);
+    if (route === "year" && parts[1]) {
+      ctx.year = Number(parts[1]);
+      return Views.yearHome?.(ctx);
+    }
+
+    if (route === "goals") return Views.goals?.(ctx);
+
+    if (route === "goal" && parts[1]) {
+      ctx.goalId = parts[1];
+      return Views.goalDetail?.(ctx);
+    }
+
+    if (route === "habits") return Views.habits?.(ctx);
+    if (route === "calendar") return Views.calendar?.(ctx);
+    if (route === "budget") return Views.budget?.(ctx);
+    if (route === "analytics") return Views.analytics?.(ctx);
+    if (route === "notifications") return Views.notifications?.(ctx);
+
+    if (route === "settings") return Views.settings?.(ctx);
+    if (route === "more") return Views.more?.(ctx);
+    if (route === "account") return Views.account?.(ctx);
+    if (route === "payment") return Views.payment?.(ctx);
+
+    // Unknown route
+    App.navTo("#/dashboard");
   }
-
-  if (route === "goals") return Views.goals?.(ctx);
-
-  if (route === "goal" && parts[1]) {
-    ctx.goalId = parts[1];
-    return Views.goalDetail?.(ctx);
-  }
-
-  if (route === "habits") return Views.habits?.(ctx);
-  if (route === "calendar") return Views.calendar?.(ctx);
-  if (route === "budget") return Views.budget?.(ctx);
-  if (route === "analytics") return Views.analytics?.(ctx);
-  if (route === "notifications") return Views.notifications?.(ctx);
-
-  if (route === "settings") return Views.settings?.(ctx);
-  if (route === "more") return Views.more?.(ctx);
-  if (route === "account") return Views.account?.(ctx);
-  if (route === "payment") return Views.payment?.(ctx);
-
-  // Unknown route
-  App.navTo("#/dashboard");
-}
 })();
