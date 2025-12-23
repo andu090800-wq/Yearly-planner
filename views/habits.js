@@ -1,4 +1,4 @@
-// views/habits.js
+// views/habits.js — Habits + prelink to goal (FINAL)
 window.Views = window.Views || {};
 window.Habits = window.Habits || {};
 
@@ -31,7 +31,6 @@ window.Habits = window.Habits || {};
   }
 
   function weekStartISO(anyISO) {
-    // Monday week start
     const d = new Date(anyISO + "T00:00:00");
     const js = d.getDay(); // Sun=0
     const offset = (js === 0 ? 6 : js - 1);
@@ -119,7 +118,7 @@ window.Habits = window.Habits || {};
     return dueCount ? (doneCount / dueCount) : 0;
   }
 
-  // -------- shared modal (single impl) --------
+  // -------- shared modal --------
   function openModal(App, title, bodyHTML, actionsHTML) {
     const overlay = document.createElement("div");
     overlay.style.position = "fixed";
@@ -174,7 +173,8 @@ window.Habits = window.Habits || {};
   }
 
   // -------- CRUD / editor --------
-  function openHabitEditor(habitId = null) {
+  // opts: { preLinkedGoalIds?: string[] }
+  function openHabitEditor(habitId = null, opts = {}) {
     const db = dbLoad();
     const yr = window.App.getYearModel(db);
     if (!yr) return;
@@ -198,7 +198,10 @@ window.Habits = window.Habits || {};
 
     // goals multi-link
     const goals = yr.goals.slice().sort((a, b) => String(a.title).localeCompare(String(b.title)));
-    const linkedGoalIds = Array.isArray(editing?.linkedGoalIds) ? editing.linkedGoalIds : [];
+    const linkedGoalIds = Array.isArray(editing?.linkedGoalIds)
+      ? editing.linkedGoalIds
+      : (Array.isArray(opts.preLinkedGoalIds) ? opts.preLinkedGoalIds.map(String) : []);
+
     const goalChecks = goals.map((g) => `
       <label class="pill" style="cursor:pointer">
         <input type="checkbox" class="gLink" value="${window.App.esc(g.id)}" ${linkedGoalIds.includes(g.id) ? "checked" : ""}/>
@@ -332,7 +335,7 @@ window.Habits = window.Habits || {};
       dbSave(db);
       window.App.toast("Category added");
       close();
-      openHabitEditor(habitId);
+      openHabitEditor(habitId, opts);
     };
 
     modal.querySelector("#saveHabitBtn").onclick = () => {
@@ -369,12 +372,15 @@ window.Habits = window.Habits || {};
         linkedGoalIds: linkedGoalIdsNew
       };
 
+      let hid = editing?.id;
+
       if (editing) {
         editing.checks = editing.checks && typeof editing.checks === "object" ? editing.checks : {};
         Object.assign(editing, payload);
       } else {
+        hid = dbUid();
         yr.habits.push({
-          id: dbUid(),
+          id: hid,
           createdAt: todayISO(),
           ...payload,
           checks: {}
@@ -386,8 +392,7 @@ window.Habits = window.Habits || {};
       for (const goal of yr.goals) {
         goal.linkedHabitIds = Array.isArray(goal.linkedHabitIds) ? goal.linkedHabitIds : [];
         const shouldHave = linkedGoalIdsNew.includes(goal.id);
-        const has = goal.linkedHabitIds.includes(editing ? editing.id : yr.habits[yr.habits.length - 1].id);
-        const hid = editing ? editing.id : yr.habits[yr.habits.length - 1].id;
+        const has = goal.linkedHabitIds.includes(hid);
 
         if (shouldHave && !has) goal.linkedHabitIds.push(hid);
         if (!shouldHave && has) goal.linkedHabitIds = goal.linkedHabitIds.filter((x) => x !== hid);
@@ -403,7 +408,6 @@ window.Habits = window.Habits || {};
       modal.querySelector("#deleteHabitBtn").onclick = () => {
         if (!confirm("Delete habit?")) return;
 
-        // remove habit
         yr.habits = (yr.habits || []).filter((x) => x.id !== editing.id);
 
         // cleanup reverse links in goals
@@ -423,6 +427,8 @@ window.Habits = window.Habits || {};
 
   // exports
   H.openHabitEditor = openHabitEditor;
+  H.openHabitEditorForGoal = (goalId) => openHabitEditor(null, { preLinkedGoalIds: [String(goalId)] });
+
   H.habitDueOn = habitDueOn;
   H.currentStreak = currentStreak;
   H.bestStreak = bestStreak;
