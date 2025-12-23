@@ -50,9 +50,6 @@
     </svg>`;
 
   // ---------- Current year helpers (FIXED) ----------
-  // IMPORTANT:
-  // - dacă nu există niciun an creat încă => return null (view-urile decid ce fac)
-  // - dacă există ani dar currentYear e null => alegem ultimul an și îl persistăm
   App.getCurrentYear = (db) => {
     const list = Array.isArray(db?.yearsOrder) ? db.yearsOrder : [];
     let cy = db?.settings?.currentYear;
@@ -63,7 +60,7 @@
       cy = Number(list[list.length - 1]);
       db.settings = db.settings || {};
       db.settings.currentYear = cy;
-      dbSave(db); // persistă ca să nu rămână null
+      dbSave(db); // persist
     }
 
     const y = Number(cy);
@@ -84,14 +81,24 @@
   }
 
   // ---------- Active nav highlight ----------
+  // Map child routes to the "main tab" you want highlighted.
+  function mapToRootTab(route) {
+    if (route === "goal") return "goals";
+    if (route === "account" || route === "settings" || route === "payment" || route === "notifications") return "more";
+    return route;
+  }
+
   function setActiveNav(route) {
+    const root = mapToRootTab(route);
+
     document.querySelectorAll(".rbLink").forEach(a => {
       const href = a.getAttribute("href") || "";
-      a.classList.toggle("active", href === `#/${route}`);
+      a.classList.toggle("active", href === `#/${root}`);
     });
+
     document.querySelectorAll(".tab").forEach(a => {
       const href = a.getAttribute("href") || "";
-      a.classList.toggle("active", href === `#/${route}`);
+      a.classList.toggle("active", href === `#/${root}`);
     });
   }
 
@@ -136,31 +143,6 @@
     render();
   };
 
-  // ---------- Placeholder view ----------
-  function renderPlaceholder(ctx, title, subtitle) {
-    const { db } = ctx;
-    App.setCrumb(title);
-    setPrimary("+ Add", () => App.toast("Coming soon"));
-
-    const y = App.getCurrentYear(db);
-    view.innerHTML = `
-      <div class="card big hero">
-        <div class="heroGlow"></div>
-        <div>
-          <div class="kpi">${App.esc(title)}</div>
-          <div class="muted">${App.esc(subtitle || "This screen will be built in the next stages.")}</div>
-          <div class="row" style="margin-top:10px">
-            <span class="pill">Year <b>${App.esc(String(y ?? ""))}</b></span>
-            <span class="pill">Currency <b>${App.esc(db.settings.currency)}</b></span>
-            <span class="pill">Week starts <b>Monday</b></span>
-            <span class="pill">Today <b>${App.esc(dbTodayISO())}</b></span>
-          </div>
-        </div>
-        ${App.heroSVG()}
-      </div>
-    `;
-  }
-
   // ---------- Router ----------
   window.addEventListener("hashchange", render);
   render();
@@ -173,13 +155,9 @@
     const route = parts[0];
     setActiveNav(route);
 
-    // ctx passed to views
     const ctx = { db, App, setPrimary };
-
-    // Views registry
     const Views = window.Views || {};
 
-    // Dispatch (REAL views)
     if (route === "dashboard") return Views.dashboard?.(ctx);
 
     if (route === "year" && parts[1]) {
@@ -188,7 +166,6 @@
     }
 
     if (route === "goals") return Views.goals?.(ctx);
-
     if (route === "goal" && parts[1]) {
       ctx.goalId = parts[1];
       return Views.goalDetail?.(ctx);
@@ -205,7 +182,6 @@
     if (route === "account") return Views.account?.(ctx);
     if (route === "payment") return Views.payment?.(ctx);
 
-    // Unknown route
     App.navTo("#/dashboard");
   }
 })();
