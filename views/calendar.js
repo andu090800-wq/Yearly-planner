@@ -90,19 +90,13 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   const focusDate = yr.calendar.focusDate;
 
   function savePrefs(patch) {
-  const db2 = dbLoad();
-  const cy = db2?.settings?.currentYear;
-  if (cy == null) return;
+    const db2 = dbLoad();
+    const yr2 = App.getYearModel(db2);
+    yr2.calendar = yr2.calendar || {};
+    Object.assign(yr2.calendar, patch);
+    dbSave(db2);
+  }
 
-  // scriem direct în db2, fără App.getYearModel
-  dbEnsureYear(db2, cy);
-  const yr2 = db2.years[String(cy)];
-
-  yr2.calendar = yr2.calendar || {};
-  Object.assign(yr2.calendar, patch);
-
-  dbSave(db2);
-}
   // ---------- Habit due + toggle ----------
   function habitDueOn(h, iso) {
     try { if (window.Habits?.habitDueOn) return !!window.Habits.habitDueOn(h, iso); } catch {}
