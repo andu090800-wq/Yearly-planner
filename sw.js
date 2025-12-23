@@ -1,4 +1,4 @@
-const CACHE = "plans-glass-v7";
+const CACHE = "plans-glass-v8";
 const ASSETS = [".", "index.html", "styles.css", "app.js", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
