@@ -2,16 +2,34 @@
 window.Views = window.Views || {};
 
 window.Views.calendar = ({ db, App, setPrimary }) => {
-  const year = App.getCurrentYear(db);
+  // ---------- Ensure we have a current year ----------
+  // (după fix-ul din app.js ar trebui să fie ok, dar facem fallback și aici)
+  const dbBoot = dbLoad();
+  if (dbBoot?.settings?.currentYear == null) {
+    const list = Array.isArray(dbBoot?.yearsOrder) ? dbBoot.yearsOrder : [];
+    if (!list.length) {
+      App.toast("Add your first year in Dashboard");
+      return App.navTo("#/dashboard");
+    }
+    dbBoot.settings.currentYear = Number(list[list.length - 1]);
+    dbSave(dbBoot);
+  }
+
+  const year = App.getCurrentYear(dbLoad());
   if (year == null) {
     App.toast("Add your first year in Dashboard");
     return App.navTo("#/dashboard");
   }
 
-  const yr = App.getYearModel(db);
+  const yr0 = App.getYearModel(dbLoad());
+  if (!yr0) {
+    App.toast("Select a year first");
+    return App.navTo("#/dashboard");
+  }
+
   const today = dbTodayISO();
 
-  // ---------- Hide global top bar on Calendar (optional, păstrez ce aveai) ----------
+  // ---------- Hide global top bar on Calendar ----------
   function setTopBarHidden(hidden) {
     const top = document.querySelector(".top");
     if (top) top.style.display = hidden ? "none" : "";
@@ -67,42 +85,45 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       day: "numeric"
     });
 
-  // ---------- Calendar prefs ----------
-  yr.calendar = yr.calendar || {
-    defaultView: "month",
-    filters: { tasks: true, habits: true, milestones: true, goals: true },
-    focus: { type: "all", id: "" },
-    focusDate: today,
-    selectedDate: today,
-    panelsOpen: false
-  };
-  yr.calendar.filters = yr.calendar.filters || { tasks: true, habits: true, milestones: true, goals: true };
-  yr.calendar.focus = yr.calendar.focus || { type: "all", id: "" };
-  yr.calendar.focusDate = yr.calendar.focusDate || today;
-  yr.calendar.selectedDate = yr.calendar.selectedDate || today;
-  yr.calendar.panelsOpen = !!yr.calendar.panelsOpen;
+  // ---------- Robust savePrefs (ALWAYS writes into current year) ----------
+  function savePrefs(patch) {
+    const db2 = dbLoad();
 
-  if (!["day", "week", "month", "year"].includes(yr.calendar.defaultView)) {
-    yr.calendar.defaultView = "month";
+    let cy = Number(db2?.settings?.currentYear);
+    if (!Number.isFinite(cy)) {
+      const list = Array.isArray(db2?.yearsOrder) ? db2.yearsOrder : [];
+      if (!list.length) return;
+      cy = Number(list[list.length - 1]);
+      db2.settings = db2.settings || {};
+      db2.settings.currentYear = cy;
+    }
+
+    dbEnsureYear(db2, cy);
+    const yr2 = db2.years[String(cy)];
+    yr2.calendar = yr2.calendar || {};
+    Object.assign(yr2.calendar, patch);
+
+    dbSave(db2);
   }
 
-  const view = yr.calendar.defaultView;
-  const focusDate = yr.calendar.focusDate;
+  // ---------- Calendar prefs (ensure defaults) ----------
+  {
+    const dbNow = dbLoad();
+    const yr = App.getYearModel(dbNow);
+    if (yr) {
+      yr.calendar = yr.calendar || {};
+      yr.calendar.defaultView = ["day", "week", "month", "year"].includes(yr.calendar.defaultView)
+        ? yr.calendar.defaultView
+        : "week";
+      yr.calendar.filters = yr.calendar.filters || { tasks: true, habits: true, milestones: true, goals: true };
+      yr.calendar.focus = yr.calendar.focus || { type: "all", id: "" };
+      yr.calendar.focusDate = yr.calendar.focusDate || today;
+      yr.calendar.selectedDate = yr.calendar.selectedDate || today;
+      yr.calendar.panelsOpen = !!yr.calendar.panelsOpen;
+      dbSave(dbNow);
+    }
+  }
 
-  function savePrefs(patch) {
-  const db2 = dbLoad();
-  const cy = db2?.settings?.currentYear;
-  if (cy == null) return;
-
-  // scriem direct în db2, fără App.getYearModel
-  dbEnsureYear(db2, cy);
-  const yr2 = db2.years[String(cy)];
-
-  yr2.calendar = yr2.calendar || {};
-  Object.assign(yr2.calendar, patch);
-
-  dbSave(db2);
-}
   // ---------- Habit due + toggle ----------
   function habitDueOn(h, iso) {
     try { if (window.Habits?.habitDueOn) return !!window.Habits.habitDueOn(h, iso); } catch {}
@@ -117,19 +138,25 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function toggleHabitCheck(habitId, iso) {
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+    if (!yr2) return;
+
     const h = (yr2.habits || []).find((x) => x.id === habitId);
     if (!h) return;
+
     h.checks = (h.checks && typeof h.checks === "object") ? h.checks : {};
     if (h.checks[iso]) delete h.checks[iso];
     else h.checks[iso] = true;
+
     dbSave(db2);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
+
+    // re-render imediat
+    rerender(iso, "day");
   }
 
   // ---------- Focus ----------
   function getFocus(dbNow) {
     const yrNow = App.getYearModel(dbNow);
-    const f = yrNow.calendar?.focus || { type: "all", id: "" };
+    const f = yrNow?.calendar?.focus || { type: "all", id: "" };
     const type = ["all", "goal", "habit"].includes(f.type) ? f.type : "all";
     return { type, id: String(f.id || "") };
   }
@@ -137,6 +164,8 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function focusLabel(dbNow) {
     const f = getFocus(dbNow);
     const yrNow = App.getYearModel(dbNow);
+    if (!yrNow) return "All";
+
     if (f.type === "all") return "All";
     if (f.type === "goal") {
       const g = (yrNow.goals || []).find((x) => x.id === f.id);
@@ -171,8 +200,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   function itemsForDay(iso) {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
-    const filters = yrNow.calendar?.filters || { tasks: true, habits: true, milestones: true, goals: true };
+    if (!yrNow) return [];
 
+    const filters = yrNow.calendar?.filters || { tasks: true, habits: true, milestones: true, goals: true };
     const items = [];
 
     // goals deadlines
@@ -240,9 +270,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return items;
   }
 
-  // ---------- Swipe ----------
-  function attachSwipe(el, getView, getISO, onMove) {
-    if (!el) return;
+  // ---------- Swipe (attach ONCE) ----------
+  function attachSwipeOnce(el, getView, getISO, onMove) {
+    if (!el || el._swipeAttached) return;
+    el._swipeAttached = true;
+
     let sx = 0, sy = 0, tracking = false;
 
     el.addEventListener("touchstart", (e) => {
@@ -280,7 +312,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     }, { passive: true });
   }
 
-  // ---------- Nav ----------
+  // ---------- Nav helpers for swipe ----------
   function navPrev(v, iso) {
     if (v === "day") return addDays(iso, -1);
     if (v === "week") return addDays(iso, -7);
@@ -306,7 +338,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     return toISO(d);
   }
 
-  // ---------- Render: DAY ----------
+  // ---------- Render ----------
   function renderDay(iso) {
     const its = itemsForDay(iso);
 
@@ -346,11 +378,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: WEEK ----------
   function renderWeek(anchorISO) {
     const start = startOfWeekMonday(anchorISO);
     const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-    const sel = (yr.calendar.selectedDate || today);
+
+    const sel = (App.getYearModel(dbLoad())?.calendar?.selectedDate || today);
     const dow = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
     const strip = days.map(d => {
@@ -378,7 +410,6 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: MONTH ----------
   function renderMonth(anchorISO) {
     const monthStart = startOfMonth(anchorISO);
     const gridStart = startOfWeekMonday(monthStart);
@@ -395,7 +426,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
       .map((x) => `<div class="calDow">${x}</div>`)
       .join("");
 
-    const selected = (yr.calendar.selectedDate || today);
+    const selected = (App.getYearModel(dbLoad())?.calendar?.selectedDate || today);
 
     const cellHtml = cells.map((d) => {
       const inMonth = monthKey(d) === monthKey(anchorISO);
@@ -432,10 +463,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- Render: YEAR ----------
   function renderYear(anchorISO) {
     const Y = Number(String(anchorISO).slice(0, 4));
-    const selected = (yr.calendar.selectedDate || today);
+    const selected = (App.getYearModel(dbLoad())?.calendar?.selectedDate || today);
     const months = Array.from({ length: 12 }, (_, i) => `${Y}-${pad2(i + 1)}-01`);
 
     const monthCards = months.map((m0) => {
@@ -487,10 +517,17 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   // ---------- UI ----------
-  const filters = yr.calendar.filters;
+  const yr = App.getYearModel(dbLoad());
+  const filters = yr?.calendar?.filters || { tasks: true, habits: true, milestones: true, goals: true };
 
-  const goalOptions = (yr.goals || []).map((g) => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
-  const habitOptions = (yr.habits || []).map((h) => `<option value="${App.esc(h.id)}">${App.esc(h.title)}</option>`).join("");
+  const goalOptions = (yr?.goals || [])
+    .map((g) => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
+
+  const habitOptions = (yr?.habits || [])
+    .map((h) => `<option value="${App.esc(h.id)}">${App.esc(h.title)}</option>`).join("");
+
+  const view0 = yr?.calendar?.defaultView || "week";
+  const focusDate0 = yr?.calendar?.focusDate || today;
 
   App.viewEl.innerHTML = `
     <div class="stack">
@@ -537,7 +574,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
             </div>
 
             <button class="btn secondary" id="clearFocusBtn">Clear</button>
-            <span class="pill" id="focusNamePill">${App.esc(focusLabel(db))}</span>
+            <span class="pill" id="focusNamePill">${App.esc(focusLabel(dbLoad()))}</span>
           </div>
         </div>
 
@@ -559,17 +596,11 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
           <button class="calSegBtn" data-view="month">Month</button>
           <button class="calSegBtn" data-view="year">Year</button>
         </div>
-
-        <div class="calNav">
-          <button class="btn secondary small" id="prevBtn">Prev</button>
-          <button class="btn secondary small" id="todayBtn">Today</button>
-          <button class="btn secondary small" id="nextBtn">Next</button>
-        </div>
       </div>
 
       <div class="calMeta">
-        <span class="pill">Focus date <b id="focusLbl">${App.esc(focusDate)}</b></span>
-        <span class="pill">View <b id="viewLbl">${App.esc(view)}</b></span>
+        <span class="pill">Focus date <b id="focusLbl">${App.esc(focusDate0)}</b></span>
+        <span class="pill">View <b id="viewLbl">${App.esc(view0)}</b></span>
       </div>
 
       <div id="calBody"></div>
@@ -578,7 +609,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   // details open/close persistence
   const det = document.getElementById("calDetails");
-  det.open = !!yr.calendar.panelsOpen;
+  det.open = !!(App.getYearModel(dbLoad())?.calendar?.panelsOpen);
   det.addEventListener("toggle", () => savePrefs({ panelsOpen: !!det.open }));
 
   // Add button
@@ -600,55 +631,62 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
 
   function openDaily(iso) {
     const d = iso || today;
-    // IMPORTANT: nu mai folosim hashchange aici — randăm imediat.
     savePrefs({ defaultView: "day", focusDate: d, selectedDate: d });
     rerender(d, "day");
   }
 
+  // ---------- RERENDER (FIXED: view really changes, no "stuck on week") ----------
   function rerender(bodyISO, nextView) {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
+    if (!yrNow) return;
 
-    const v = nextView || (yrNow.calendar?.defaultView || "month");
+    const v = (nextView && ["day", "week", "month", "year"].includes(nextView))
+      ? nextView
+      : (yrNow.calendar?.defaultView || "week");
+
     const iso = bodyISO || (yrNow.calendar?.focusDate || today);
     const selected = yrNow.calendar?.selectedDate || today;
 
+    // persist first
     savePrefs({
       defaultView: v,
       focusDate: iso,
       selectedDate: (v === "day" ? iso : selected)
     });
 
-    const dbNow2 = dbLoad();
-    const yrNow2 = App.getYearModel(dbNow2);
+    // re-read after save to be 100% consistent
+    const yrNow2 = App.getYearModel(dbLoad());
+    const vNow = (yrNow2?.calendar?.defaultView || "week");
+    const isoNow = (yrNow2?.calendar?.focusDate || today);
 
-    const vNow = (yrNow2.calendar?.defaultView || "month");
-    const isoNow = (yrNow2.calendar?.focusDate || today);
-
-    document.getElementById("viewLbl").textContent = vNow;
-    document.getElementById("focusLbl").textContent = isoNow;
-    document.getElementById("focusNamePill").textContent = focusLabel(dbNow2);
+    const viewLbl = document.getElementById("viewLbl");
+    const focusLbl = document.getElementById("focusLbl");
+    const focusPill = document.getElementById("focusNamePill");
+    if (viewLbl) viewLbl.textContent = vNow;
+    if (focusLbl) focusLbl.textContent = isoNow;
+    if (focusPill) focusPill.textContent = focusLabel(dbLoad());
 
     setSegActive(vNow);
 
     const el = document.getElementById("calBody");
+    if (!el) return;
+
     if (vNow === "year") el.innerHTML = renderYear(isoNow);
     else if (vNow === "month") el.innerHTML = renderMonth(isoNow);
     else if (vNow === "week") el.innerHTML = renderWeek(isoNow);
     else el.innerHTML = renderDay(isoNow);
 
-    // Swipe
-    attachSwipe(
+    // Swipe (once)
+    attachSwipeOnce(
       el,
-      () => (App.getYearModel(dbLoad()).calendar?.defaultView || "month"),
-      () => (App.getYearModel(dbLoad()).calendar?.focusDate || today),
+      () => (App.getYearModel(dbLoad())?.calendar?.defaultView || "week"),
+      () => (App.getYearModel(dbLoad())?.calendar?.focusDate || today),
       (dir, vX, isoX) => {
         const newISO = dir === "next" ? navNext(vX, isoX) : navPrev(vX, isoX);
 
-        const dbX = dbLoad();
-        const yrX = App.getYearModel(dbX);
-        const sel = yrX.calendar?.selectedDate || today;
-
+        const yrX = App.getYearModel(dbLoad());
+        const sel = yrX?.calendar?.selectedDate || today;
         let newSel = sel;
 
         if (vX === "day") newSel = newISO;
@@ -664,7 +702,6 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
         }
 
         savePrefs({ focusDate: newISO, selectedDate: newSel });
-        // re-render imediat, nu prin hashchange
         rerender(newISO, vX);
       }
     );
@@ -711,11 +748,14 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     el.onchange = () => {
       const db2 = dbLoad();
       const yr2 = App.getYearModel(db2);
+      if (!yr2) return;
+
       yr2.calendar = yr2.calendar || {};
       yr2.calendar.filters = yr2.calendar.filters || { tasks: true, habits: true, milestones: true, goals: true };
       yr2.calendar.filters[key] = !!el.checked;
+
       dbSave(db2);
-      rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today);
+      rerender(App.getYearModel(dbLoad())?.calendar?.focusDate || today);
     };
   };
   bindFilter("fTasks", "tasks");
@@ -735,20 +775,23 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     const dbNow = dbLoad();
     const f = getFocus(dbNow);
 
-    modeEl.value = f.type;
-    goalWrap.style.display = (f.type === "goal") ? "block" : "none";
-    habitWrap.style.display = (f.type === "habit") ? "block" : "none";
+    if (modeEl) modeEl.value = f.type;
+    if (goalWrap) goalWrap.style.display = (f.type === "goal") ? "block" : "none";
+    if (habitWrap) habitWrap.style.display = (f.type === "habit") ? "block" : "none";
 
     if (f.type === "goal" && goalEl) goalEl.value = f.id || (goalEl.options[0]?.value || "");
     if (f.type === "habit" && habitEl) habitEl.value = f.id || (habitEl.options[0]?.value || "");
 
-    document.getElementById("focusNamePill").textContent = focusLabel(dbNow);
+    const pill = document.getElementById("focusNamePill");
+    if (pill) pill.textContent = focusLabel(dbNow);
   }
 
-  modeEl.onchange = () => {
+  if (modeEl) modeEl.onchange = () => {
     const mode = modeEl.value;
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+    if (!yr2) return;
+
     yr2.calendar = yr2.calendar || {};
 
     if (mode === "goal") yr2.calendar.focus = { type: "goal", id: goalEl?.value || "" };
@@ -756,56 +799,62 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     else yr2.calendar.focus = { type: "all", id: "" };
 
     dbSave(db2);
-    rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today);
+    syncFocusUI();
+    rerender(App.getYearModel(dbLoad())?.calendar?.focusDate || today);
   };
 
   if (goalEl) goalEl.onchange = () => {
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+    if (!yr2) return;
+
     yr2.calendar = yr2.calendar || {};
     yr2.calendar.focus = { type: "goal", id: goalEl.value || "" };
+
     dbSave(db2);
-    rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today);
+    syncFocusUI();
+    rerender(App.getYearModel(dbLoad())?.calendar?.focusDate || today);
   };
 
   if (habitEl) habitEl.onchange = () => {
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+    if (!yr2) return;
+
     yr2.calendar = yr2.calendar || {};
     yr2.calendar.focus = { type: "habit", id: habitEl.value || "" };
+
     dbSave(db2);
-    rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today);
+    syncFocusUI();
+    rerender(App.getYearModel(dbLoad())?.calendar?.focusDate || today);
   };
 
-  clearBtn.onclick = () => {
+  if (clearBtn) clearBtn.onclick = () => {
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
+    if (!yr2) return;
+
     yr2.calendar = yr2.calendar || {};
     yr2.calendar.focus = { type: "all", id: "" };
+
     dbSave(db2);
-    rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today);
+    syncFocusUI();
+    rerender(App.getYearModel(dbLoad())?.calendar?.focusDate || today);
   };
 
-  // Segmented control
+  // Segmented control (Day/Week/Month/Year)
   document.querySelectorAll(".calSegBtn").forEach((btn) => {
-    btn.onclick = () => rerender(App.getYearModel(dbLoad()).calendar?.focusDate || today, btn.getAttribute("data-view"));
+    btn.onclick = () => rerender(
+      App.getYearModel(dbLoad())?.calendar?.focusDate || today,
+      btn.getAttribute("data-view")
+    );
   });
-
-  // Nav buttons
-  document.getElementById("todayBtn").onclick = () => rerender(today, (App.getYearModel(dbLoad()).calendar?.defaultView || "month"));
-  document.getElementById("prevBtn").onclick = () => {
-    const yNow = App.getYearModel(dbLoad());
-    rerender(navPrev(yNow.calendar?.defaultView || "month", yNow.calendar?.focusDate || today), yNow.calendar?.defaultView || "month");
-  };
-  document.getElementById("nextBtn").onclick = () => {
-    const yNow = App.getYearModel(dbLoad());
-    rerender(navNext(yNow.calendar?.defaultView || "month", yNow.calendar?.focusDate || today), yNow.calendar?.defaultView || "month");
-  };
 
   // First render
   syncFocusUI();
-  rerender(focusDate, view);
+  rerender(focusDate0, view0);
 
+  // Keep focus UI in sync if hash changes
   window.addEventListener("hashchange", () => {
     try { syncFocusUI(); } catch {}
   });
