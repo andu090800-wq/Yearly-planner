@@ -1,4 +1,4 @@
-// views/goalDetail.js
+// views/goalDetail.js — Goal detail with +Habit and +Milestone (FINAL)
 window.Views = window.Views || {};
 
 window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
@@ -54,10 +54,8 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
   }
 
   function calcProgress(goal) {
-    // try global helper
     if (window.Goals?.calcGoalProgress) return window.Goals.calcGoalProgress(goal);
 
-    // fallback tasks ratio
     let total = 0, done = 0;
     for (const ms of (goal.milestones || [])) {
       for (const t of (ms.tasks || [])) {
@@ -70,7 +68,6 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
   }
 
   function openInCalendar(iso) {
-    // set calendar to day view + focusDate
     const db2 = dbLoad();
     const yr2 = App.getYearModel(db2);
     if (yr2) {
@@ -83,6 +80,55 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
     App.navTo("#/calendar");
   }
 
+  function goBack() {
+    // back to category page if exists, else categories root
+    const cid = (g.categoryId || "").trim();
+    if (cid) App.navTo(`#/goals/${cid}`);
+    else App.navTo("#/goals");
+  }
+
+  function addMilestoneQuick() {
+    const title = prompt("Milestone title:");
+    if (!title) return;
+    const due = prompt("Milestone due date (YYYY-MM-DD) optional:", "") || "";
+    save(({ g2 }) => {
+      g2.milestones = Array.isArray(g2.milestones) ? g2.milestones : [];
+      g2.milestones.push({ id: dbUid(), title: title.trim(), dueDate: due.trim(), tasks: [] });
+    });
+    App.toast("Milestone added");
+    render();
+  }
+
+  function addHabitForGoal() {
+    // best: open habit editor with this goal pre-checked
+    if (window.Habits?.openHabitEditorForGoal) return window.Habits.openHabitEditorForGoal(goalId);
+
+    // fallback: quick create + link
+    const title = prompt("Habit title (linked to this goal):");
+    if (!title) return;
+
+    save(({ yr2, g2 }) => {
+      const hid = dbUid();
+      yr2.habits = Array.isArray(yr2.habits) ? yr2.habits : [];
+      yr2.habits.push({
+        id: hid,
+        createdAt: dbTodayISO(),
+        title: title.trim(),
+        categoryId: "",
+        notes: "",
+        recurrenceRule: { kind: "weekdays" },
+        linkedGoalIds: [g2.id],
+        checks: {}
+      });
+
+      g2.linkedHabitIds = Array.isArray(g2.linkedHabitIds) ? g2.linkedHabitIds : [];
+      if (!g2.linkedHabitIds.includes(hid)) g2.linkedHabitIds.push(hid);
+    });
+
+    App.toast("Habit created & linked");
+    render();
+  }
+
   function render() {
     const dbNow = dbLoad();
     const yrNow = App.getYearModel(dbNow);
@@ -93,17 +139,9 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
     gNow.linkedHabitIds = Array.isArray(gNow.linkedHabitIds) ? gNow.linkedHabitIds : [];
 
     App.setCrumb(`Goal • ${year}`);
-    setPrimary("+ Milestone", () => {
-      const title = prompt("Milestone title:");
-      if (!title) return;
-      const due = prompt("Milestone due date (YYYY-MM-DD) optional:", "") || "";
-      save(({ g2 }) => {
-        g2.milestones = Array.isArray(g2.milestones) ? g2.milestones : [];
-        g2.milestones.push({ id: dbUid(), title: title.trim(), dueDate: due.trim(), tasks: [] });
-      });
-      App.toast("Milestone added");
-      render();
-    });
+
+    // keep primary action simple (optional)
+    setPrimary("+ Milestone", () => addMilestoneQuick());
 
     const pr = calcProgress(gNow);
     const overdueGoal = (gNow.endDate || "").trim() && gNow.endDate < today && pr.ratio < 0.999;
@@ -126,9 +164,11 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
                 : ``}
             </div>
 
-            <div class="row" style="margin-top:10px">
+            <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
               <button class="btn secondary" id="backBtn">← Back</button>
-              <button class="btn" id="editGoalBtn">Edit goal</button>
+              <button class="btn secondary" id="addHabitBtnTop">+ Habit</button>
+              <button class="btn" id="addMsBtnTop">+ Milestone</button>
+              <button class="btn secondary" id="editGoalBtn">Edit goal</button>
             </div>
           </div>
           ${App.heroSVG()}
@@ -141,7 +181,7 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
               <div class="muted">These habits also show up in Calendar.</div>
             </div>
             <div class="row">
-              <button class="btn secondary" id="linkHabitBtn">+ Link habit</button>
+              <button class="btn secondary" id="linkHabitBtn">+ Link existing habit</button>
             </div>
           </div>
 
@@ -189,13 +229,16 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
     `;
 
     // header actions
-    document.getElementById("backBtn").onclick = () => App.navTo("#/goals");
-    document.getElementById("editGoalBtn").onclick = () => window.Goals?.openGoalEditor?.(gNow.id);
+    document.getElementById("backBtn").onclick = () => goBack();
+    document.getElementById("editGoalBtn").onclick = () => window.Goals?.openGoalEditor?.(gNow.id, gNow.categoryId || "");
+    document.getElementById("addHabitBtnTop").onclick = () => addHabitForGoal();
+    document.getElementById("addMsBtnTop").onclick = () => addMilestoneQuick();
+
     if ((gNow.endDate || "").trim()) {
       document.getElementById("openDeadlineCal").onclick = () => openInCalendar(gNow.endDate);
     }
 
-    // linked habits actions
+    // link existing habit actions
     document.getElementById("linkHabitBtn").onclick = () => {
       const all = (yrNow.habits || []).slice().sort((a, b) => String(a.title).localeCompare(String(b.title)));
       if (!all.length) return App.toast("No habits yet. Create one first.");
@@ -203,6 +246,7 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
       const list = all.map((h, i) => `${i + 1}. ${h.title}`).join("\n");
       const pick = prompt(`Pick habit number to link:\n${list}`, "1");
       if (!pick) return;
+
       const idx = Number(pick) - 1;
       const h = all[idx];
       if (!h) return;
@@ -244,15 +288,17 @@ window.Views.goalDetail = ({ db, App, setPrimary, goalId }) => {
       };
     });
 
-    // add milestone
+    // add milestone form
     document.getElementById("addMsBtn").onclick = () => {
       const title = document.getElementById("msTitle").value.trim();
       const due = document.getElementById("msDue").value || "";
       if (!title) return alert("Milestone title required.");
+
       save(({ g2 }) => {
         g2.milestones = Array.isArray(g2.milestones) ? g2.milestones : [];
         g2.milestones.push({ id: dbUid(), title, dueDate: due, tasks: [] });
       });
+
       App.toast("Milestone added");
       render();
     };
