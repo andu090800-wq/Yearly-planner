@@ -688,3 +688,113 @@ textarea{ min-height:110px; resize: vertical; }
   .anPane{ min-height:auto; }
   .anBody{ min-height: 40vh; }
 }
+
+/* =========================================================
+   YEAR VIEW — mini calendare (iOS-like)
+   ========================================================= */
+
+.yMiniWrap{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+@media (min-width: 900px){
+  .yMiniWrap{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.yMiniCard{
+  background: rgba(10, 14, 24, .72);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow: var(--shadow2);
+  border-radius: var(--r);
+  padding:12px;
+}
+
+.yMiniTitle{
+  width:100%;
+  text-align:left;
+  border:0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 900;
+  padding:0 0 8px 0;
+  cursor:pointer;
+}
+
+.yMiniDow{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:6px;
+  margin-bottom:6px;
+  font-size:10px;
+  color: var(--muted);
+  font-weight:900;
+  text-transform: uppercase;
+  letter-spacing:.06em;
+  text-align:center;
+}
+
+.yMiniGrid{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:6px;
+}
+
+.yMiniCell{
+  -webkit-appearance:none;
+  appearance:none;
+  border:0 !important;
+  background: transparent !important;
+  padding:0 !important;
+  height:26px;
+  border-radius:10px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+.yMiniCell.dim{ opacity:.28; }
+
+.yMiniNum{
+  width:22px;
+  height:22px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  font-size:11px;
+  line-height:1;
+  color: var(--text);
+}
+
+/* selected = cerc alb plin */
+.yMiniCell.sel .yMiniNum{
+  background: rgba(255,255,255,.92);
+  color: rgba(0,0,0,.92);
+}
+
+/* today ring */
+.yMiniCell.today .yMiniNum{
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.28);
+}
+.yMiniCell.today.sel .yMiniNum{ box-shadow:none; }
+
+/* overdue ring */
+.yMiniCell.bad .yMiniNum{
+  box-shadow: inset 0 0 0 2px rgba(255,120,120,.28);
+}
+.yMiniCell.bad.sel .yMiniNum{ box-shadow:none; }
+
+.yMiniDot{
+  position:absolute;
+  bottom:3px;
+  width:5px;
+  height:5px;
+  border-radius:999px;
+  background: rgba(255,255,255,.70);
+}
+.yMiniCell.sel .yMiniDot{ background: rgba(0,0,0,.65); }
