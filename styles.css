@@ -1996,3 +1996,31 @@ select.input{
   z-index: 5000;
 }
 .hidden{ display:none !important; }
+
+/* ---- Calendar contrast fix ---- */
+
+/* pills/chips: nu alb spălăcit */
+.pill {
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* card glass variant: mai lizibil */
+.glass2 {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* text muted să nu fie prea “șters” */
+.muted {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* dacă ai calendar cells albe */
+.calendarCell,
+.calCell,
+.dayCell {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
