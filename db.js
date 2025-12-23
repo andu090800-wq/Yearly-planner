@@ -1,12 +1,11 @@
-/* db.js (v2.2 - Categories per Year + Goals by Category + Global Habits per Year)
+/* db.js (v2.2 - STRICT categories)
 - Local-only storage (localStorage)
 - Years are user-created
-- Everything is per-year (currentYear), including goals/habits/budget/notes/calendar
-- Goals MUST have a VALID categoryId (no auto "General" category)
-- Habits are global per-year: yr.habits
-- Goals link habits via goal.linkedHabitIds
-- Habits link goals via habit.linkedGoalIds
-- Safe normalization + migration from old structure
+- Everything is per-year (currentYear)
+- Goals MUST have a valid categoryId (NO defaults like "General")
+- If a goal has missing/invalid categoryId during normalize => it is DELETED (per user rule)
+- Habits are per-year global (yr.habits) but categories are NOT separate:
+  Habits are "linked" to Goal categories via linkedGoalIds -> goal.categoryId
 */
 
 const DB_KEY = "plans_app_db_v1"; // păstrat ca să NU pierzi datele vechi
@@ -27,8 +26,7 @@ function dbTodayISO() {
 // ---------- Defaults ----------
 function defaultCategoriesPerYear() {
   return {
-    goals: [],         // {id, name, archived}
-    habits: [],        // {id, name, archived}
+    goals: [],         // {id, name, archived}  (THE ONLY category source for goals + habits)
     budgetIncome: [],  // {id, name, archived}
     budgetExpense: []  // {id, name, archived}
   };
@@ -53,14 +51,10 @@ function defaultYearModel(yearNum) {
 
     categories: defaultCategoriesPerYear(),
 
-    // goals per-year
-    goals: [],
+    goals: [],   // per-year
+    habits: [],  // per-year (global list)
 
-    // habits per-year (GLOBAL, used by views/habits.js)
-    habits: [],
-
-    // notes per-year
-    notes: [], // {id, title, text, createdAt, updatedAt}
+    notes: [],   // {id, title, text, createdAt, updatedAt}
 
     calendar: {
       defaultView: "week", // day|week|month|year
@@ -120,7 +114,6 @@ function normHabit(h) {
     id: String(h?.id || dbUid()),
     createdAt: String(h?.createdAt || dbTodayISO()),
     title: String(h?.title || "Habit"),
-    categoryId: String(h?.categoryId || ""),
     notes: String(h?.notes || ""),
     recurrenceRule:
       (h?.recurrenceRule && typeof h.recurrenceRule === "object")
@@ -135,14 +128,17 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   const y = Number(yearModel?.year ?? yearNumFallback);
   const base = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
 
-  // always ensure structure
   const out = base;
   out.year = y;
 
-  // Categories
+  // Categories (GOALS are the single source of categories)
   if (!out.categories || typeof out.categories !== "object") out.categories = defaultCategoriesPerYear();
+
+  // Accept old shapes safely
   out.categories.goals = Array.isArray(out.categories.goals) ? out.categories.goals.map(normCat) : [];
-  out.categories.habits = Array.isArray(out.categories.habits) ? out.categories.habits.map(normCat) : [];
+
+  // Backward compat: if old db had categories.habits, ignore it (we unify to goals categories)
+  // Keep budget cats
   out.categories.budgetIncome = Array.isArray(out.categories.budgetIncome) ? out.categories.budgetIncome.map(normCat) : [];
   out.categories.budgetExpense = Array.isArray(out.categories.budgetExpense) ? out.categories.budgetExpense.map(normCat) : [];
 
@@ -151,29 +147,23 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.goals = out.goals.map(g => ({
     id: String(g?.id || dbUid()),
     title: String(g?.title || "Untitled goal"),
-    categoryId: String(g?.categoryId || ""), // MUST be valid (we enforce below)
+    categoryId: String(g?.categoryId || ""), // MUST be valid, otherwise goal will be deleted below
     startDate: g?.startDate ? String(g.startDate) : "",
     endDate: g?.endDate ? String(g.endDate) : "",
     targetValue: (g?.targetValue ?? ""),
     currentValue: (g?.currentValue ?? ""),
     unit: String(g?.unit || ""),
     notes: String(g?.notes || ""),
-
     milestones: Array.isArray(g?.milestones) ? g.milestones.map(normMilestone) : [],
-
-    // Linking model used by your views:
     linkedHabitIds: Array.isArray(g?.linkedHabitIds) ? g.linkedHabitIds.map(String) : []
   }));
 
-  // Habits (GLOBAL per-year)
+  // Habits
   out.habits = Array.isArray(out.habits) ? out.habits : [];
   out.habits = out.habits.map(normHabit);
 
-  // -------- Migration from "habits inside goals" (older db structure) --------
-  // If some previous db had goal.habits, merge them into out.habits
-  // and preserve links both ways.
+  // -------- Migration: if some older db had goal.habits, merge them into yr.habits --------
   const seenHabitIds = new Set(out.habits.map(h => h.id));
-
   for (const gRaw of (Array.isArray(base?.goals) ? base.goals : [])) {
     const gId = String(gRaw?.id || "");
     const goal = out.goals.find(x => x.id === gId);
@@ -183,20 +173,17 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     for (const h0 of innerHabits) {
       const h = normHabit(h0);
 
-      // ensure it’s global
       if (!seenHabitIds.has(h.id)) {
         out.habits.push(h);
         seenHabitIds.add(h.id);
       }
 
-      // ensure reverse link habit -> goal
       const hRef = out.habits.find(x => x.id === h.id);
-      if (hRef) {
+      if (hRef && goal) {
         hRef.linkedGoalIds = Array.isArray(hRef.linkedGoalIds) ? hRef.linkedGoalIds : [];
-        if (goal && !hRef.linkedGoalIds.includes(goal.id)) hRef.linkedGoalIds.push(goal.id);
+        if (!hRef.linkedGoalIds.includes(goal.id)) hRef.linkedGoalIds.push(goal.id);
       }
 
-      // ensure forward link goal -> habit
       if (goal) {
         goal.linkedHabitIds = Array.isArray(goal.linkedHabitIds) ? goal.linkedHabitIds : [];
         if (!goal.linkedHabitIds.includes(h.id)) goal.linkedHabitIds.push(h.id);
@@ -204,14 +191,34 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     }
   }
 
-  // ✅ STRICT: Goals MUST have a VALID categoryId
-  // - NO auto-created "General" category
-  // - Any goal missing/invalid category is dropped during normalization
-  const validGoalCatIds = new Set((out.categories.goals || []).map(c => String(c.id)));
+  // ---------- STRICT RULE: goals MUST have valid categoryId ----------
+  // If missing/invalid => DELETE (per user instruction).
+  const validCatIds = new Set((out.categories.goals || []).map(c => String(c.id)));
+
+  const deletedGoalIds = new Set();
   out.goals = (out.goals || []).filter(g => {
-    const cid = String(g?.categoryId || "");
-    return cid && validGoalCatIds.has(cid);
+    const ok = !!g.categoryId && validCatIds.has(String(g.categoryId));
+    if (!ok) deletedGoalIds.add(String(g.id));
+    return ok;
   });
+
+  // Cleanup reverse links because some goals were deleted
+  if (deletedGoalIds.size) {
+    // remove deleted goals from habits.linkedGoalIds
+    out.habits = (out.habits || []).map(h => {
+      h.linkedGoalIds = Array.isArray(h.linkedGoalIds) ? h.linkedGoalIds.map(String) : [];
+      h.linkedGoalIds = h.linkedGoalIds.filter(id => !deletedGoalIds.has(String(id)));
+      return h;
+    });
+
+    // also remove any habit link on goals that no longer exists (optional cleanup)
+    const habitIds = new Set((out.habits || []).map(h => h.id));
+    out.goals = (out.goals || []).map(g => {
+      g.linkedHabitIds = Array.isArray(g.linkedHabitIds) ? g.linkedHabitIds.map(String) : [];
+      g.linkedHabitIds = g.linkedHabitIds.filter(id => habitIds.has(String(id)));
+      return g;
+    });
+  }
 
   // Notes
   out.notes = Array.isArray(out.notes) ? out.notes : [];
@@ -225,7 +232,6 @@ function normalizeYearModel(yearModel, yearNumFallback) {
 
   // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
-
   out.calendar.defaultView =
     ["day", "week", "month", "year"].includes(out.calendar.defaultView)
       ? out.calendar.defaultView
