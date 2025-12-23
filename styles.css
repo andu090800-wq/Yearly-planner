@@ -1565,3 +1565,53 @@ textarea:focus{
   touch-action:pan-x;
 }
 .tabsScroll .tab{ flex:0 0 auto; white-space:nowrap; }
+
+/* =========================
+   Pull to refresh (under header)
+   ========================= */
+
+#ptr{
+  position: sticky;
+  top: 56px; /* fallback dacă headerul are ~56px */
+  z-index: 40; /* sub header (header e 50) */
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#ptr .ptrInner{
+  transform: translateY(calc(-1 * var(--ptrY, 0px)));
+  opacity: var(--ptrOpacity, 0);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding: 10px 12px;
+}
+
+#ptr .ptrText{
+  font-size:12px;
+  font-weight:900;
+  color: var(--muted);
+}
+
+#ptr .ptrSpinner{
+  width:16px;
+  height:16px;
+  border-radius:999px;
+  border:2px solid rgba(0,0,0,.18);
+  border-top-color: rgba(0,0,0,.55);
+  animation: ptrSpin 0.9s linear infinite;
+  opacity: 0;
+}
+
+#ptr.ptrArmed .ptrText{ color: #111; }
+#ptr.ptrRefreshing .ptrSpinner{ opacity: 1; }
+#ptr.ptrRefreshing .ptrText{ color: #111; }
+
+@keyframes ptrSpin{
+  to{ transform: rotate(360deg); }
+}
+
+/* ensure it is NEVER over the header */
+.top{ position: sticky; top:0; z-index:50; }
