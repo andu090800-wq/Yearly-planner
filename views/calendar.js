@@ -516,10 +516,9 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
     `;
   }
 
-  // ---------- UI ----------
-  const yr = App.getYearModel(dbLoad());
-  const filters = yr?.calendar?.filters || { tasks: true, habits: true, milestones: true, goals: true };
-
+// ---------- UI ----------
+const yr = yr0; // ✅ folosește ce ai deja sus
+const filters = yr?.calendar?.filters || { tasks: true, habits: true, milestones: true, goals: true };
   const goalOptions = (yr?.goals || [])
     .map((g) => `<option value="${App.esc(g.id)}">${App.esc(g.title)}</option>`).join("");
 
