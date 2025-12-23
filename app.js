@@ -83,10 +83,20 @@
   // ---------- Active nav highlight ----------
   // Map child routes to the "main tab" you want highlighted.
   function mapToRootTab(route) {
-    if (route === "goal") return "goals";
-    if (route === "account" || route === "settings" || route === "payment" || route === "notifications") return "more";
-    return route;
-  }
+  if (route === "goal") return "goals";
+
+  // tot ce e "secondary" intră sub More
+  if (
+    route === "account" ||
+    route === "settings" ||
+    route === "payment" ||
+    route === "notifications" ||
+    route === "budget" ||        // ✅ ADD THIS
+    route === "analytics"        // (opțional, dar recomand)
+  ) return "more";
+
+  return route;
+}
 
   function setActiveNav(route) {
     const root = mapToRootTab(route);
