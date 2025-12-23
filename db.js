@@ -1,12 +1,13 @@
-/* db.js (FINAL)
+/* db.js (v2 - Goals by Category per Year + Habits inside Goals)
 - Local-only storage (localStorage)
-- No preset years: user creates years manually from Dashboard
-- Global settings: currency (RON/EUR/USD), weekStartsOn Monday
-- Supports Goals, Habits (binary), Calendar, Budget Pro
-- Safe normalization/migrations
+- Years are user-created
+- Everything is per-year (currentYear), including goals/habits/budget/notes/calendar
+- Goals MUST have a categoryId
+- Habits are stored inside each goal (parallel to milestones)
+- Safe normalization + migration from old structure
 */
 
-const DB_KEY = "plans_app_db_v1";
+const DB_KEY = "plans_app_db_v1"; // păstrat ca să NU pierzi datele vechi
 
 // ---------- Utils ----------
 function dbUid() {
@@ -24,10 +25,9 @@ function dbTodayISO() {
 // ---------- Defaults ----------
 function defaultCategoriesPerYear() {
   return {
-    goals: [], // {id, name, archived}
-    habits: [], // {id, name, archived}
-    budgetIncome: [], // {id, name, archived}
-    budgetExpense: [] // {id, name, archived}
+    goals: [],         // {id, name, archived}
+    budgetIncome: [],  // {id, name, archived}
+    budgetExpense: []  // {id, name, archived}
   };
 }
 
@@ -38,11 +38,7 @@ function defaultBudgetPro() {
       { id: dbUid(), name: "Cash", type: "cash" },
       { id: dbUid(), name: "Savings", type: "savings" }
     ],
-    // transactions:
-    // { id, type:"income"|"expense"|"transfer", amount, date, accountId, toAccountId?, categoryId?, note?, createdAt, _sig? }
     transactions: [],
-    // recurringRules:
-    // { id, type:"income"|"expense", amount, accountId, categoryId, note?, schedule, startDate?, endDate?, lastGeneratedThrough? }
     recurringRules: []
   };
 }
@@ -51,9 +47,15 @@ function defaultYearModel(yearNum) {
   const t = dbTodayISO();
   return {
     year: Number(yearNum),
+
     categories: defaultCategoriesPerYear(),
+
+    // goals per-year
     goals: [],
-    habits: [],
+
+    // notes per-year (simplu pentru moment)
+    notes: [], // {id, title, text, createdAt, updatedAt}
+
     calendar: {
       defaultView: "week", // day|week|month|year
       filters: { tasks: true, habits: true, milestones: true, goals: true },
@@ -62,13 +64,14 @@ function defaultYearModel(yearNum) {
       selectedDate: t,
       panelsOpen: false
     },
+
     budget: defaultBudgetPro()
   };
 }
 
 function dbFresh() {
   return {
-    version: 1,
+    version: 2,
     settings: {
       currency: "RON",
       weekStartsOn: "monday",
@@ -79,7 +82,46 @@ function dbFresh() {
   };
 }
 
-// ---------- Normalization ----------
+// ---------- Normalize helpers ----------
+function normCat(x) {
+  return {
+    id: String(x?.id || dbUid()),
+    name: String(x?.name || "Category"),
+    archived: !!x?.archived
+  };
+}
+
+function normTask(t) {
+  return {
+    id: String(t?.id || dbUid()),
+    title: String(t?.title || "Task"),
+    dueDate: t?.dueDate ? String(t.dueDate) : "",
+    done: !!t?.done
+  };
+}
+
+function normMilestone(ms) {
+  return {
+    id: String(ms?.id || dbUid()),
+    title: String(ms?.title || "Milestone"),
+    dueDate: ms?.dueDate ? String(ms.dueDate) : "",
+    tasks: Array.isArray(ms?.tasks) ? ms.tasks.map(normTask) : []
+  };
+}
+
+function normHabit(h) {
+  return {
+    id: String(h?.id || dbUid()),
+    title: String(h?.title || "Habit"),
+    notes: String(h?.notes || ""),
+    recurrenceRule: (h?.recurrenceRule && typeof h.recurrenceRule === "object")
+      ? h.recurrenceRule
+      : { kind: "weekdays" },
+    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {},
+    createdAt: String(h?.createdAt || dbTodayISO())
+  };
+}
+
 function normalizeYearModel(yearModel, yearNumFallback) {
   const y = Number(yearModel?.year ?? yearNumFallback);
   const out = (yearModel && typeof yearModel === "object") ? yearModel : defaultYearModel(y);
@@ -87,18 +129,18 @@ function normalizeYearModel(yearModel, yearNumFallback) {
 
   // Categories
   if (!out.categories || typeof out.categories !== "object") out.categories = defaultCategoriesPerYear();
-  const c = out.categories;
-  c.goals = Array.isArray(c.goals) ? c.goals : [];
-  c.habits = Array.isArray(c.habits) ? c.habits : [];
-  c.budgetIncome = Array.isArray(c.budgetIncome) ? c.budgetIncome : [];
-  c.budgetExpense = Array.isArray(c.budgetExpense) ? c.budgetExpense : [];
+  out.categories.goals = Array.isArray(out.categories.goals) ? out.categories.goals.map(normCat) : [];
+  out.categories.budgetIncome = Array.isArray(out.categories.budgetIncome) ? out.categories.budgetIncome.map(normCat) : [];
+  out.categories.budgetExpense = Array.isArray(out.categories.budgetExpense) ? out.categories.budgetExpense.map(normCat) : [];
 
-  for (const k of ["goals", "habits", "budgetIncome", "budgetExpense"]) {
-    c[k] = c[k].map(x => ({
-      id: String(x?.id || dbUid()),
-      name: String(x?.name || "Category"),
-      archived: !!x?.archived
-    }));
+  // Ensure at least a default goal category if we have goals without category (migration)
+  function ensureGeneralGoalCategory() {
+    let g = out.categories.goals.find(c => (c?.name || "").toLowerCase() === "general");
+    if (!g) {
+      g = { id: dbUid(), name: "General", archived: false };
+      out.categories.goals.unshift(g);
+    }
+    return g.id;
   }
 
   // Goals
@@ -106,46 +148,93 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   out.goals = out.goals.map(g => ({
     id: String(g?.id || dbUid()),
     title: String(g?.title || "Untitled goal"),
-    categoryId: String(g?.categoryId || ""),
+    categoryId: String(g?.categoryId || ""), // MUST exist (we'll fix below)
     startDate: g?.startDate ? String(g.startDate) : "",
     endDate: g?.endDate ? String(g.endDate) : "",
     targetValue: (g?.targetValue ?? ""),
     currentValue: (g?.currentValue ?? ""),
     unit: String(g?.unit || ""),
     notes: String(g?.notes || ""),
-    milestones: Array.isArray(g?.milestones) ? g.milestones.map(ms => ({
-      id: String(ms?.id || dbUid()),
-      title: String(ms?.title || "Milestone"),
-      dueDate: ms?.dueDate ? String(ms.dueDate) : "",
-      tasks: Array.isArray(ms?.tasks) ? ms.tasks.map(t => ({
-        id: String(t?.id || dbUid()),
-        title: String(t?.title || "Task"),
-        dueDate: t?.dueDate ? String(t.dueDate) : "",
-        done: !!t?.done
-      })) : []
-    })) : [],
-    linkedHabitIds: Array.isArray(g?.linkedHabitIds) ? g.linkedHabitIds.map(String) : []
+
+    milestones: Array.isArray(g?.milestones) ? g.milestones.map(normMilestone) : [],
+
+    // NEW: habits inside goal (parallel to milestones)
+    habits: Array.isArray(g?.habits) ? g.habits.map(normHabit) : []
   }));
 
-  // Habits
-  out.habits = Array.isArray(out.habits) ? out.habits : [];
-  out.habits = out.habits.map(h => ({
-    id: String(h?.id || dbUid()),
-    title: String(h?.title || "Untitled habit"),
-    categoryId: String(h?.categoryId || ""),
-    notes: String(h?.notes || ""),
-    recurrenceRule: (h?.recurrenceRule && typeof h.recurrenceRule === "object")
-      ? h.recurrenceRule
-      : { kind: "weekdays" },
-    checks: (h?.checks && typeof h.checks === "object") ? h.checks : {},
-    linkedGoalIds: Array.isArray(h?.linkedGoalIds) ? h.linkedGoalIds.map(String) : [],
-    createdAt: String(h?.createdAt || dbTodayISO())
+  // Migration: if old structure had linkedHabitIds or year.habits, try to attach
+  // (we won't keep global habits as feature, but we won't lose data)
+  const legacyYearHabits = Array.isArray(out.habits) ? out.habits : []; // from old db.js
+  if (legacyYearHabits.length) {
+    // Build quick maps
+    const byId = new Map(legacyYearHabits.map(h => [String(h?.id || ""), h]));
+    // Attach by linkedGoalIds
+    for (const lh of legacyYearHabits) {
+      const linkedGoalIds = Array.isArray(lh?.linkedGoalIds) ? lh.linkedGoalIds.map(String) : [];
+      if (!linkedGoalIds.length) continue;
+      for (const gid of linkedGoalIds) {
+        const goal = out.goals.find(g => g.id === gid);
+        if (goal) goal.habits.push(normHabit(lh));
+      }
+    }
+
+    // Attach by goals that had linkedHabitIds (old)
+    for (const goalRaw of (Array.isArray(yearModel?.goals) ? yearModel.goals : [])) {
+      const goal = out.goals.find(g => g.id === String(goalRaw?.id || ""));
+      const linkedHabitIds = Array.isArray(goalRaw?.linkedHabitIds) ? goalRaw.linkedHabitIds.map(String) : [];
+      if (!goal || !linkedHabitIds.length) continue;
+      for (const hid of linkedHabitIds) {
+        const lh = byId.get(hid);
+        if (lh) goal.habits.push(normHabit(lh));
+      }
+    }
+
+    // Any leftover habits that weren't attached → put into a special imported goal
+    const attached = new Set();
+    for (const g of out.goals) for (const h of g.habits) attached.add(h.id);
+
+    const leftovers = legacyYearHabits
+      .map(normHabit)
+      .filter(h => !attached.has(h.id));
+
+    if (leftovers.length) {
+      const catId = ensureGeneralGoalCategory();
+      out.goals.push({
+        id: dbUid(),
+        title: "Imported Habits",
+        categoryId: catId,
+        startDate: "",
+        endDate: "",
+        targetValue: "",
+        currentValue: "",
+        unit: "",
+        notes: "Auto-created during migration.",
+        milestones: [],
+        habits: leftovers
+      });
+    }
+  }
+
+  // Enforce categoryId for every goal (required)
+  const generalId = ensureGeneralGoalCategory();
+  const validCatIds = new Set(out.categories.goals.map(c => c.id));
+  for (const g of out.goals) {
+    if (!g.categoryId || !validCatIds.has(g.categoryId)) g.categoryId = generalId;
+  }
+
+  // Notes
+  out.notes = Array.isArray(out.notes) ? out.notes : [];
+  out.notes = out.notes.map(n => ({
+    id: String(n?.id || dbUid()),
+    title: String(n?.title || "Note"),
+    text: String(n?.text || ""),
+    createdAt: String(n?.createdAt || dbTodayISO()),
+    updatedAt: String(n?.updatedAt || n?.createdAt || dbTodayISO())
   }));
 
   // Calendar
   if (!out.calendar || typeof out.calendar !== "object") out.calendar = defaultYearModel(y).calendar;
 
-  // ✅ allow day
   out.calendar.defaultView =
     ["day", "week", "month", "year"].includes(out.calendar.defaultView)
       ? out.calendar.defaultView
@@ -164,7 +253,6 @@ function normalizeYearModel(yearModel, yearNumFallback) {
   if (!["all", "goal", "habit"].includes(out.calendar.focus.type)) out.calendar.focus.type = "all";
   out.calendar.focus.id = String(out.calendar.focus.id || "");
 
-  // ✅ persist these
   const t = dbTodayISO();
   out.calendar.focusDate = out.calendar.focusDate ? String(out.calendar.focusDate) : t;
   out.calendar.selectedDate = out.calendar.selectedDate ? String(out.calendar.selectedDate) : t;
@@ -211,12 +299,14 @@ function normalizeYearModel(yearModel, yearNumFallback) {
     lastGeneratedThrough: r?.lastGeneratedThrough ? String(r.lastGeneratedThrough) : ""
   }));
 
+  // cleanup legacy field if present (not used anymore)
+  out.habits = []; // no global habits
   return out;
 }
 
 function normalizeDb(db) {
   const out = (db && typeof db === "object") ? db : dbFresh();
-  out.version = 1;
+  out.version = 2;
 
   // Settings
   out.settings = out.settings && typeof out.settings === "object" ? out.settings : {};
@@ -305,7 +395,6 @@ function dbAddYear(db, yearNum) {
   dbSave(db);
 }
 
-/** Deletes a year AND all its data (goals/habits/budget/calendar settings). */
 function dbDeleteYear(db, yearNum) {
   const y = Number(yearNum);
   if (!Number.isFinite(y)) throw new Error("Invalid year");
