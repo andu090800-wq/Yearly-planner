@@ -560,11 +560,7 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
           <button class="calSegBtn" data-view="year">Year</button>
         </div>
 
-        <div class="calNav">
-          <button class="btn secondary small" id="prevBtn">Prev</button>
-          <button class="btn secondary small" id="todayBtn">Today</button>
-          <button class="btn secondary small" id="nextBtn">Next</button>
-        </div>
+        
       </div>
 
       <div class="calMeta">
@@ -792,15 +788,34 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   });
 
   // Nav buttons
-  document.getElementById("todayBtn").onclick = () => rerender(today, (App.getYearModel(dbLoad()).calendar?.defaultView || "month"));
-  document.getElementById("prevBtn").onclick = () => {
-    const yNow = App.getYearModel(dbLoad());
-    rerender(navPrev(yNow.calendar?.defaultView || "month", yNow.calendar?.focusDate || today), yNow.calendar?.defaultView || "month");
-  };
-  document.getElementById("nextBtn").onclick = () => {
-    const yNow = App.getYearModel(dbLoad());
-    rerender(navNext(yNow.calendar?.defaultView || "month", yNow.calendar?.focusDate || today), yNow.calendar?.defaultView || "month");
-  };
+  const todayBtn = document.getElementById("todayBtn");
+const prevBtn  = document.getElementById("prevBtn");
+const nextBtn  = document.getElementById("nextBtn");
+
+if (todayBtn) todayBtn.onclick = () =>
+  rerender(today, (App.getYearModel(dbLoad()).calendar?.defaultView || "month"));
+
+if (prevBtn) prevBtn.onclick = () => {
+  const yNow = App.getYearModel(dbLoad());
+  rerender(
+    navPrev(
+      yNow.calendar?.defaultView || "month",
+      yNow.calendar?.focusDate || today
+    ),
+    yNow.calendar?.defaultView || "month"
+  );
+};
+
+if (nextBtn) nextBtn.onclick = () => {
+  const yNow = App.getYearModel(dbLoad());
+  rerender(
+    navNext(
+      yNow.calendar?.defaultView || "month",
+      yNow.calendar?.focusDate || today
+    ),
+    yNow.calendar?.defaultView || "month"
+  );
+};
 
   // First render
   syncFocusUI();
