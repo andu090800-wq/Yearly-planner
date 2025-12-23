@@ -99,12 +99,12 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   // ---------- Robust savePrefs (scrie direct în anul curent) ----------
   function savePrefs(patch) {
   const db2 = dbLoad();
+  db2.settings = db2.settings || {};
 
-  // ✅ garantează un an curent valid
-  let cy = Number(db2?.settings?.currentYear);
+  let cy = Number(db2.settings.currentYear);
   if (!Number.isFinite(cy)) {
-    cy = App.getCurrentYear(db2);          // fallback (ex: 2026)
-    db2.settings.currentYear = cy;         // ✅ IMPORTANT: persistă în settings
+    cy = App.getCurrentYear(db2);
+    db2.settings.currentYear = cy;
   }
 
   dbEnsureYear(db2, cy);
@@ -127,19 +127,28 @@ window.Views.calendar = ({ db, App, setPrimary }) => {
   }
 
   function toggleHabitCheck(habitId, iso) {
-    const db2 = dbLoad();
-    const cy = db2?.settings?.currentYear;
-    if (cy == null) return;
+  const db2 = dbLoad();
+  db2.settings = db2.settings || {};
 
-    const yr2 = db2.years?.[String(cy)];
-    const h = (yr2?.habits || []).find((x) => x.id === habitId);
-    if (!h) return;
+  let cy = Number(db2.settings.currentYear);
+  if (!Number.isFinite(cy)) {
+    cy = App.getCurrentYear(db2);
+    db2.settings.currentYear = cy;
+  }
 
-    h.checks = (h.checks && typeof h.checks === "object") ? h.checks : {};
-    if (h.checks[iso]) delete h.checks[iso];
-    else h.checks[iso] = true;
+  dbEnsureYear(db2, cy);
 
-    dbSave(db2);
+  const yr2 = db2.years?.[String(cy)];
+  const h = (yr2?.habits || []).find((x) => x.id === habitId);
+  if (!h) return;
+
+  h.checks = (h.checks && typeof h.checks === "object") ? h.checks : {};
+  if (h.checks[iso]) delete h.checks[iso];
+  else h.checks[iso] = true;
+
+  dbSave(db2);
+  rerender(iso, "day");
+}
 
     // re-render imediat (fără hashchange)
     rerender(iso, "day");
