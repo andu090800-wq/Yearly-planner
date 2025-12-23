@@ -1,5 +1,5 @@
 // sw.js (FINAL - robust, no stale views)
-const CACHE = "plans-glass-v14";
+const CACHE = "plans-glass-v20";
 
 // ✅ include tot ce folosește app-ul (altfel rămâi cu views vechi în cache)
 const ASSETS = [
